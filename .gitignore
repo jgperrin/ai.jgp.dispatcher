@@ -21,6 +21,7 @@
 
 # Maven build output
 target/
+dependency-reduced-pom.xml
 
 # IDE
 .idea/
