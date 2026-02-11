@@ -67,13 +67,13 @@ public class CliConfig {
             }
         }
 
-        // Fall back to environment variables
-        if (file == null) file = System.getenv(K.ENV_FILE);
-        if (tenant == null) tenant = System.getenv(K.ENV_TENANT);
-        if (apiKey == null) apiKey = System.getenv(K.ENV_API_KEY);
-        if (catalog == null) catalog = System.getenv(K.ENV_CATALOG);
+        // Fall back to environment variables (treat blank as unset)
+        if (file == null) file = envOrNull(K.ENV_FILE);
+        if (tenant == null) tenant = envOrNull(K.ENV_TENANT);
+        if (apiKey == null) apiKey = envOrNull(K.ENV_API_KEY);
+        if (catalog == null) catalog = envOrNull(K.ENV_CATALOG);
         if (catalog == null) catalog = K.DEFAULT_CATALOG;
-        if (url == null) url = System.getenv(K.ENV_URL);
+        if (url == null) url = envOrNull(K.ENV_URL);
 
         // Validate required fields
         boolean valid = true;
@@ -108,6 +108,11 @@ public class CliConfig {
         }
 
         return new CliConfig(file, tenant, apiKey, catalog, baseUrl, debug);
+    }
+
+    private static String envOrNull(String name) {
+        String value = System.getenv(name);
+        return (value == null || value.isBlank()) ? null : value;
     }
 
     private static String nextArg(String[] args, int index, String flag) {

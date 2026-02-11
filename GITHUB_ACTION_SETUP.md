@@ -69,7 +69,7 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # 3. Check out the uploader tool and build it
+      # 3. Check out the uploader tool (public repo)
       - name: Checkout uploader
         uses: actions/checkout@v4
         with:
