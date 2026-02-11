@@ -37,19 +37,6 @@ You can add additional secrets the same way if needed:
 | `ZEENEA_TENANT`  | Your tenant name (e.g. `my-company`)                | Yes      |
 | `ZEENEA_URL`     | Custom base URL (only if not using production)      | No       |
 | `ZEENEA_CATALOG` | Catalog code (defaults to `default` if not set)     | No       |
-| `UPLOADER_PAT`   | GitHub PAT with access to the uploader repo (see below) | Yes  |
-
-### Creating the Personal Access Token (PAT)
-
-The uploader lives in a separate private repository (`jgperrin/ai.jgp.gha.data-product-uploader`). For the workflow to check it out, you need a GitHub Personal Access Token with read access to that repo.
-
-1. Go to [github.com/settings/tokens](https://github.com/settings/tokens) (or **Settings** > **Developer settings** > **Personal access tokens** > **Fine-grained tokens**).
-2. Click **Generate new token**.
-3. Give it a name like `uploader-checkout`.
-4. Under **Repository access**, select **Only select repositories** and pick `jgperrin/ai.jgp.gha.data-product-uploader`.
-5. Under **Permissions** > **Repository permissions**, set **Contents** to **Read-only**.
-6. Click **Generate token** and copy the value.
-7. Go back to your data contracts repository and add it as a secret named `UPLOADER_PAT` (same process as Step 1 above).
 
 ## Step 2: Create the Workflow File
 
@@ -82,12 +69,11 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # 3. Check out the uploader tool (private repo — requires PAT)
+      # 3. Check out the uploader tool (public repo)
       - name: Checkout uploader
         uses: actions/checkout@v4
         with:
           repository: jgperrin/ai.jgp.gha.data-product-uploader
-          token: ${{ secrets.UPLOADER_PAT }}
           path: uploader
 
       - name: Build uploader
@@ -161,7 +147,6 @@ If the upload fails, the workflow will show a red X and you can inspect the erro
 
 | Problem | Likely Cause | Fix |
 |---------|-------------|-----|
-| `Not Found` on "Checkout uploader" | `UPLOADER_PAT` secret is missing or the PAT lacks access to the uploader repo | Create a fine-grained PAT with Contents read access and add it as the `UPLOADER_PAT` secret |
 | Workflow does not trigger | Files are not in `podem/` or don't end with `.odps.yaml` | Check file paths and extensions |
 | `Error: --api-key is required` | Secret `ZEENEA_API_KEY` is not set | Add it in Settings > Secrets |
 | `Error: --tenant is required` | Secret `ZEENEA_TENANT` is not set | Add it in Settings > Secrets |

@@ -12,7 +12,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-JAR="$PROJECT_DIR/target/data-product-uploader-0.1.4.jar"
+JAR="$PROJECT_DIR/target/data-product-uploader-0.1.5.jar"
 
 # Build if JAR doesn't exist
 if [ ! -f "$JAR" ]; then
