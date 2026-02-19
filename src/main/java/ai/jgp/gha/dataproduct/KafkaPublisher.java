@@ -1,21 +1,16 @@
 package ai.jgp.gha.dataproduct;
 
-import org.apache.kafka.clients.admin.AdminClient;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.serialization.StringSerializer;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Collections;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -29,103 +24,59 @@ public class KafkaPublisher {
 
     private static final String TRUSTSTORE_RELATIVE_PATH = ".kafka/kafka.client.truststore.jks";
     private static final String TRUSTSTORE_PASSWORD = "changeit";
-    private static final int TOPIC_PARTITIONS = 1;
-    private static final short TOPIC_REPLICATION_FACTOR = 1;
-    private static final long SEND_TIMEOUT_SECONDS = 30;
+    private static final long SEND_TIMEOUT_SECONDS = 15;
+    private static final int MAX_BLOCK_MS = 10000;
+    private static final int REQUEST_TIMEOUT_MS = 10000;
+    private static final int DELIVERY_TIMEOUT_MS = 15000;
 
     private final KafkaProducer<String, String> producer;
-    private final Properties connectionProps;
 
     public KafkaPublisher(String broker, String user, String password) {
-        log.fine("Initializing KafkaPublisher with broker: " + broker
-                + ", user: " + (user != null ? user : "(none)")
-                + ", password: " + (password != null ? "***" : "(none)"));
+        System.out.println("       Broker: " + broker);
+        System.out.println("       Auth:   " + (user != null && password != null
+                ? "SASL_SSL (SCRAM-SHA-512, user=" + user + ")"
+                : "PLAINTEXT (no credentials)"));
 
         String truststorePath = Path.of(System.getProperty("user.home"), TRUSTSTORE_RELATIVE_PATH).toString();
 
-        connectionProps = new Properties();
-        connectionProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, broker);
+        Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, broker);
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        props.put(ProducerConfig.ACKS_CONFIG, "all");
+
+        // Shorter timeouts for faster failure diagnostics
+        props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, MAX_BLOCK_MS);
+        props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, REQUEST_TIMEOUT_MS);
+        props.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, DELIVERY_TIMEOUT_MS);
 
         // SASL_SSL + SCRAM-SHA-512
         if (user != null && password != null) {
-            connectionProps.put("security.protocol", "SASL_SSL");
-            connectionProps.put("sasl.mechanism", "SCRAM-SHA-512");
-            connectionProps.put("sasl.jaas.config",
+            props.put("security.protocol", "SASL_SSL");
+            props.put("sasl.mechanism", "SCRAM-SHA-512");
+            props.put("sasl.jaas.config",
                     "org.apache.kafka.common.security.scram.ScramLoginModule required "
                             + "username=\"" + user + "\" "
                             + "password=\"" + password + "\";");
 
             // Truststore configuration
             if (Files.exists(Path.of(truststorePath))) {
-                connectionProps.put("ssl.truststore.location", truststorePath);
-                connectionProps.put("ssl.truststore.password", TRUSTSTORE_PASSWORD);
-                log.fine("Using truststore: " + truststorePath);
+                props.put("ssl.truststore.location", truststorePath);
+                props.put("ssl.truststore.password", TRUSTSTORE_PASSWORD);
+                System.out.println("       Truststore: " + truststorePath);
             } else {
-                log.fine("Truststore not found at " + truststorePath + ", using default SSL context");
+                System.out.println("       Truststore: (not found, using default SSL context)");
+                log.fine("Truststore not found at " + truststorePath);
             }
         } else {
-            log.fine("No Kafka credentials provided, using PLAINTEXT");
-            connectionProps.put("security.protocol", "PLAINTEXT");
+            props.put("security.protocol", "PLAINTEXT");
         }
 
-        Properties producerProps = new Properties();
-        producerProps.putAll(connectionProps);
-        producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-        producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-        producerProps.put(ProducerConfig.ACKS_CONFIG, "all");
-
-        log.fine("Creating KafkaProducer with security.protocol="
-                + producerProps.getProperty("security.protocol"));
-        this.producer = new KafkaProducer<>(producerProps);
+        log.fine("Producer config: max.block.ms=" + MAX_BLOCK_MS
+                + ", request.timeout.ms=" + REQUEST_TIMEOUT_MS
+                + ", delivery.timeout.ms=" + DELIVERY_TIMEOUT_MS);
+        this.producer = new KafkaProducer<>(props);
         log.fine("KafkaProducer created successfully");
-    }
-
-    /**
-     * Ensures the given topic exists, creating it if necessary.
-     *
-     * @param topic the topic name to ensure exists
-     */
-    /**
-     * Best-effort check: ensures the given topic exists, creating it if
-     * necessary. If the check fails (e.g. network/auth issue), a warning
-     * is logged and publishing proceeds anyway — the producer will fail
-     * later with a clearer error if the topic truly doesn't exist.
-     *
-     * @param topic the topic name to ensure exists
-     */
-    public void ensureTopicExists(String topic) {
-        log.fine("Checking if topic " + topic + " exists...");
-        try (AdminClient admin = AdminClient.create(connectionProps)) {
-            var existingTopics = admin.listTopics().names().get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-            log.fine("Broker has " + existingTopics.size() + " topic(s): " + existingTopics);
-            if (existingTopics.contains(topic)) {
-                log.fine("Topic " + topic + " already exists");
-                return;
-            }
-
-            log.fine("Topic " + topic + " not found, creating with "
-                    + TOPIC_PARTITIONS + " partition(s), replication factor "
-                    + TOPIC_REPLICATION_FACTOR);
-            NewTopic newTopic = new NewTopic(topic, TOPIC_PARTITIONS, TOPIC_REPLICATION_FACTOR);
-            admin.createTopics(Collections.singleton(newTopic)).all()
-                    .get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-            System.out.println("       Created Kafka topic: " + topic);
-        } catch (ExecutionException e) {
-            if (e.getCause() instanceof TopicExistsException) {
-                log.fine("Topic " + topic + " was created concurrently");
-            } else {
-                System.err.println("  Warning: could not verify topic " + topic
-                        + ": " + e.getCause().getMessage());
-                log.log(Level.WARNING, "Failed to verify/create topic " + topic, e.getCause());
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            System.err.println("  Warning: interrupted while checking topic " + topic);
-        } catch (TimeoutException e) {
-            System.err.println("  Warning: timed out checking topic " + topic
-                    + ", proceeding anyway");
-            log.warning("Timed out checking topic " + topic + ", will attempt publish regardless");
-        }
     }
 
     /**

@@ -68,8 +68,6 @@ public class App {
                     config.getKafkaUser(),
                     config.getKafkaPassword());
 
-            publisher.ensureTopicExists(K.KAFKA_TOPIC_SPEC_INGEST);
-
             YAMLMapper yamlMapper = new YAMLMapper();
 
             log.fine("Opening ZIP file: " + config.getFilePath());
