@@ -6,7 +6,7 @@
 
     <groupId>ai.jgp.gha</groupId>
     <artifactId>data-product-uploader</artifactId>
-    <version>0.2.3</version>
+    <version>0.2.5</version>
     <packaging>jar</packaging>
 
     <name>Data Product Uploader</name>
@@ -19,7 +19,7 @@
         <gson.version>2.11.0</gson.version>
         <kafka.version>3.8.1</kafka.version>
         <jackson.version>2.17.0</jackson.version>
-        <slf4j.version>2.0.13</slf4j.version>
+        <slf4j.version>1.7.36</slf4j.version>
     </properties>
 
     <dependencies>
@@ -40,7 +40,7 @@
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-simple</artifactId>
+            <artifactId>slf4j-jdk14</artifactId>
             <version>${slf4j.version}</version>
         </dependency>
     </dependencies>

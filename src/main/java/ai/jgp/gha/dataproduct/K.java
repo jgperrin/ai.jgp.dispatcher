@@ -5,7 +5,7 @@ package ai.jgp.gha.dataproduct;
  */
 public class K {
 
-    public static final String VERSION = "0.2.3";
+    public static final String VERSION = "0.2.5";
 
     public static final String DEFAULT_CATALOG = "default";
 
@@ -28,7 +28,7 @@ public class K {
 
     // Kafka
     public static final String ENV_KAFKA_BROKER = "KAFKA_BROKER_URL";
-    public static final String ENV_KAFKA_USER = "KAFKA_USER";
+    public static final String ENV_KAFKA_USER = "KAFKA_USERNAME";
     public static final String ENV_KAFKA_PASSWORD = "KAFKA_PASSWORD";
     public static final String KAFKA_TOPIC_SPEC_INGEST = "controlcenter.spec.ingest";
 

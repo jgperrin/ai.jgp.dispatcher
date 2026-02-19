@@ -45,7 +45,7 @@ If you want the uploader to publish specs to the Data Product Control Center via
 | Secret Name        | Description                                            | Required |
 |--------------------|--------------------------------------------------------|----------|
 | `KAFKA_BROKER_URL` | Kafka broker URL (e.g. `cloud.jgp.ai:9093`)           | No       |
-| `KAFKA_USER`       | SASL username for Kafka SCRAM-SHA-512 authentication   | No       |
+| `KAFKA_USERNAME`   | SASL username for Kafka SCRAM-SHA-512 authentication   | No       |
 | `KAFKA_PASSWORD`   | SASL password for Kafka authentication                 | No       |
 
 ## Step 2: Create the Workflow File
@@ -106,7 +106,7 @@ jobs:
           ZEENEA_URL: ${{ secrets.ZEENEA_URL }}
           ZEENEA_CATALOG: ${{ secrets.ZEENEA_CATALOG }}
           KAFKA_BROKER_URL: ${{ secrets.KAFKA_BROKER_URL }}
-          KAFKA_USER: ${{ secrets.KAFKA_USER }}
+          KAFKA_USERNAME: ${{ secrets.KAFKA_USERNAME }}
           KAFKA_PASSWORD: ${{ secrets.KAFKA_PASSWORD }}
         run: |
           java -jar uploader/target/data-product-uploader-*.jar \
@@ -171,5 +171,5 @@ If the upload fails, the workflow will show a red X and you can inspect the erro
 | `Error: --tenant is required` | Secret `ZEENEA_TENANT` is not set | Add it in Settings > Secrets |
 | `HTTP 500: Permission denied` | API key lacks required permissions | Regenerate key with Admin or Scanner scope |
 | `HTTP 500` on processing | Missing or invalid `catalogCode` | Set `ZEENEA_CATALOG` secret or check catalog name |
-| `Error publishing to Kafka` | Broker unreachable or bad credentials | Verify `KAFKA_BROKER_URL`, `KAFKA_USER`, `KAFKA_PASSWORD` secrets |
+| `Error publishing to Kafka` | Broker unreachable or bad credentials | Verify `KAFKA_BROKER_URL`, `KAFKA_USERNAME`, `KAFKA_PASSWORD` secrets |
 | Kafka publishing skipped | `KAFKA_BROKER_URL` secret not set | Add it in Settings > Secrets (Kafka is optional) |

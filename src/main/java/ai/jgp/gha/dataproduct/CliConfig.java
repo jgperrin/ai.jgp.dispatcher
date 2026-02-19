@@ -173,7 +173,7 @@ public class CliConfig {
         System.out.println("  ZEENEA_CATALOG      Fallback for --catalog");
         System.out.println("  ZEENEA_URL          Fallback for --url");
         System.out.println("  KAFKA_BROKER_URL    Fallback for --kafka-broker");
-        System.out.println("  KAFKA_USER          Fallback for --kafka-user");
+        System.out.println("  KAFKA_USERNAME      Fallback for --kafka-user");
         System.out.println("  KAFKA_PASSWORD      Fallback for --kafka-password");
     }
 

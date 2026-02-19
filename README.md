@@ -76,7 +76,7 @@ When configured, the uploader publishes each YAML spec from the ZIP to the `cont
 | Flag | Env Variable | Required | Default | Description |
 |------|-------------|----------|---------|-------------|
 | `--kafka-broker` | `KAFKA_BROKER_URL` | No | - | Kafka broker URL (e.g. `cloud.jgp.ai:9093`) |
-| `--kafka-user` | `KAFKA_USER` | No | - | SASL username for Kafka authentication |
+| `--kafka-user` | `KAFKA_USERNAME` | No | - | SASL username for Kafka authentication |
 | `--kafka-password` | `KAFKA_PASSWORD` | No | - | SASL password for Kafka authentication |
 
 The Kafka producer uses **SASL_SSL** with **SCRAM-SHA-512** and expects a truststore at `~/.kafka/kafka.client.truststore.jks`. If no credentials are provided (broker only), it falls back to PLAINTEXT.
