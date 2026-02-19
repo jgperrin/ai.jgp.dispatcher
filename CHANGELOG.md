@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-02-19
+
+### Added
+- Debug traces throughout the Kafka publishing flow (visible with `--debug` flag): broker connection details, topic existence check, ZIP entry processing, YAML parsing results, and envelope size before send.
+
+## [0.2.1] - 2026-02-19
+
+### Fixed
+- Kafka topic auto-creation: the publisher now creates the `controlcenter.spec.ingest` topic if it does not exist on the broker, preventing `TimeoutException`.
+- Kafka publishing is now synchronous — "Published:" output only appears after a successful send, not before the result is known.
+- Publishing summary now reports both published and failed counts.
+
 ## [0.2.0] - 2026-02-19
 
 ### Added
