@@ -11,15 +11,22 @@ public class CliConfig {
     private final String catalogCode;
     private final String baseUrl;
     private final boolean debug;
+    private final String kafkaBroker;
+    private final String kafkaUser;
+    private final String kafkaPassword;
 
     private CliConfig(String filePath, String tenant, String apiKey,
-                      String catalogCode, String baseUrl, boolean debug) {
+                      String catalogCode, String baseUrl, boolean debug,
+                      String kafkaBroker, String kafkaUser, String kafkaPassword) {
         this.filePath = filePath;
         this.tenant = tenant;
         this.apiKey = apiKey;
         this.catalogCode = catalogCode;
         this.baseUrl = baseUrl;
         this.debug = debug;
+        this.kafkaBroker = kafkaBroker;
+        this.kafkaUser = kafkaUser;
+        this.kafkaPassword = kafkaPassword;
     }
 
     public static CliConfig parse(String[] args) {
@@ -29,6 +36,9 @@ public class CliConfig {
         String catalog = null;
         String url = null;
         boolean debug = false;
+        String kafkaBroker = null;
+        String kafkaUser = null;
+        String kafkaPassword = null;
 
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
@@ -46,6 +56,15 @@ public class CliConfig {
                     break;
                 case "--url":
                     url = nextArg(args, i++, "--url");
+                    break;
+                case "--kafka-broker":
+                    kafkaBroker = nextArg(args, i++, "--kafka-broker");
+                    break;
+                case "--kafka-user":
+                    kafkaUser = nextArg(args, i++, "--kafka-user");
+                    break;
+                case "--kafka-password":
+                    kafkaPassword = nextArg(args, i++, "--kafka-password");
                     break;
                 case "--debug":
                     debug = true;
@@ -74,6 +93,9 @@ public class CliConfig {
         if (catalog == null) catalog = envOrNull(K.ENV_CATALOG);
         if (catalog == null) catalog = K.DEFAULT_CATALOG;
         if (url == null) url = envOrNull(K.ENV_URL);
+        if (kafkaBroker == null) kafkaBroker = envOrNull(K.ENV_KAFKA_BROKER);
+        if (kafkaUser == null) kafkaUser = envOrNull(K.ENV_KAFKA_USER);
+        if (kafkaPassword == null) kafkaPassword = envOrNull(K.ENV_KAFKA_PASSWORD);
 
         // Validate required fields
         boolean valid = true;
@@ -107,7 +129,8 @@ public class CliConfig {
             baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
         }
 
-        return new CliConfig(file, tenant, apiKey, catalog, baseUrl, debug);
+        return new CliConfig(file, tenant, apiKey, catalog, baseUrl, debug,
+                kafkaBroker, kafkaUser, kafkaPassword);
     }
 
     private static String envOrNull(String name) {
@@ -131,14 +154,17 @@ public class CliConfig {
         System.out.println("Usage: java -jar data-product-uploader.jar [options]");
         System.out.println();
         System.out.println("Options:");
-        System.out.println("  --file <path>       Path to the ZIP file (required)");
-        System.out.println("  --tenant <name>     Zeenea tenant name (required)");
-        System.out.println("  --api-key <key>     API key secret (required)");
-        System.out.println("  --catalog <code>    Catalog code (default: \"default\")");
-        System.out.println("  --url <url>         Base URL (overrides tenant-based URL)");
-        System.out.println("  --debug             Enable debug logging");
-        System.out.println("  --version, -v       Show version");
-        System.out.println("  --help, -h          Show this help");
+        System.out.println("  --file <path>           Path to the ZIP file (required)");
+        System.out.println("  --tenant <name>         Zeenea tenant name (required)");
+        System.out.println("  --api-key <key>         API key secret (required)");
+        System.out.println("  --catalog <code>        Catalog code (default: \"default\")");
+        System.out.println("  --url <url>             Base URL (overrides tenant-based URL)");
+        System.out.println("  --kafka-broker <url>    Kafka broker URL (optional)");
+        System.out.println("  --kafka-user <user>     Kafka SASL username (optional)");
+        System.out.println("  --kafka-password <pwd>  Kafka SASL password (optional)");
+        System.out.println("  --debug                 Enable debug logging");
+        System.out.println("  --version, -v           Show version");
+        System.out.println("  --help, -h              Show this help");
         System.out.println();
         System.out.println("Environment variables:");
         System.out.println("  ZEENEA_FILE         Fallback for --file");
@@ -146,6 +172,9 @@ public class CliConfig {
         System.out.println("  ZEENEA_API_KEY      Fallback for --api-key");
         System.out.println("  ZEENEA_CATALOG      Fallback for --catalog");
         System.out.println("  ZEENEA_URL          Fallback for --url");
+        System.out.println("  KAFKA_BROKER_URL    Fallback for --kafka-broker");
+        System.out.println("  KAFKA_USER          Fallback for --kafka-user");
+        System.out.println("  KAFKA_PASSWORD      Fallback for --kafka-password");
     }
 
     public String getFilePath() {
@@ -170,5 +199,24 @@ public class CliConfig {
 
     public boolean isDebug() {
         return debug;
+    }
+
+    public String getKafkaBroker() {
+        return kafkaBroker;
+    }
+
+    public String getKafkaUser() {
+        return kafkaUser;
+    }
+
+    public String getKafkaPassword() {
+        return kafkaPassword;
+    }
+
+    /**
+     * Returns true if Kafka publishing is configured (broker URL is set).
+     */
+    public boolean isKafkaConfigured() {
+        return kafkaBroker != null;
     }
 }
