@@ -1,14 +1,21 @@
 package ai.jgp.gha.dataproduct;
 
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.serialization.StringSerializer;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -22,68 +29,123 @@ public class KafkaPublisher {
 
     private static final String TRUSTSTORE_RELATIVE_PATH = ".kafka/kafka.client.truststore.jks";
     private static final String TRUSTSTORE_PASSWORD = "changeit";
+    private static final int TOPIC_PARTITIONS = 1;
+    private static final short TOPIC_REPLICATION_FACTOR = 1;
+    private static final long SEND_TIMEOUT_SECONDS = 30;
 
     private final KafkaProducer<String, String> producer;
+    private final Properties connectionProps;
 
     public KafkaPublisher(String broker, String user, String password) {
+        log.fine("Initializing KafkaPublisher with broker: " + broker
+                + ", user: " + (user != null ? user : "(none)")
+                + ", password: " + (password != null ? "***" : "(none)"));
+
         String truststorePath = Path.of(System.getProperty("user.home"), TRUSTSTORE_RELATIVE_PATH).toString();
 
-        Properties props = new Properties();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, broker);
-        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-        props.put(ProducerConfig.ACKS_CONFIG, "all");
+        connectionProps = new Properties();
+        connectionProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, broker);
 
         // SASL_SSL + SCRAM-SHA-512
         if (user != null && password != null) {
-            props.put("security.protocol", "SASL_SSL");
-            props.put("sasl.mechanism", "SCRAM-SHA-512");
-            props.put("sasl.jaas.config",
+            connectionProps.put("security.protocol", "SASL_SSL");
+            connectionProps.put("sasl.mechanism", "SCRAM-SHA-512");
+            connectionProps.put("sasl.jaas.config",
                     "org.apache.kafka.common.security.scram.ScramLoginModule required "
                             + "username=\"" + user + "\" "
                             + "password=\"" + password + "\";");
 
             // Truststore configuration
             if (Files.exists(Path.of(truststorePath))) {
-                props.put("ssl.truststore.location", truststorePath);
-                props.put("ssl.truststore.password", TRUSTSTORE_PASSWORD);
+                connectionProps.put("ssl.truststore.location", truststorePath);
+                connectionProps.put("ssl.truststore.password", TRUSTSTORE_PASSWORD);
                 log.fine("Using truststore: " + truststorePath);
             } else {
                 log.fine("Truststore not found at " + truststorePath + ", using default SSL context");
             }
         } else {
             log.fine("No Kafka credentials provided, using PLAINTEXT");
-            props.put("security.protocol", "PLAINTEXT");
+            connectionProps.put("security.protocol", "PLAINTEXT");
         }
 
-        this.producer = new KafkaProducer<>(props);
+        Properties producerProps = new Properties();
+        producerProps.putAll(connectionProps);
+        producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        producerProps.put(ProducerConfig.ACKS_CONFIG, "all");
+
+        log.fine("Creating KafkaProducer with security.protocol="
+                + producerProps.getProperty("security.protocol"));
+        this.producer = new KafkaProducer<>(producerProps);
+        log.fine("KafkaProducer created successfully");
+    }
+
+    /**
+     * Ensures the given topic exists, creating it if necessary.
+     *
+     * @param topic the topic name to ensure exists
+     */
+    public void ensureTopicExists(String topic) {
+        log.fine("Checking if topic " + topic + " exists...");
+        try (AdminClient admin = AdminClient.create(connectionProps)) {
+            var existingTopics = admin.listTopics().names().get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            log.fine("Broker has " + existingTopics.size() + " topic(s): " + existingTopics);
+            if (existingTopics.contains(topic)) {
+                log.fine("Topic " + topic + " already exists");
+                return;
+            }
+
+            log.fine("Topic " + topic + " not found, creating with "
+                    + TOPIC_PARTITIONS + " partition(s), replication factor "
+                    + TOPIC_REPLICATION_FACTOR);
+            NewTopic newTopic = new NewTopic(topic, TOPIC_PARTITIONS, TOPIC_REPLICATION_FACTOR);
+            admin.createTopics(Collections.singleton(newTopic)).all()
+                    .get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            System.out.println("       Created Kafka topic: " + topic);
+        } catch (ExecutionException e) {
+            if (e.getCause() instanceof TopicExistsException) {
+                log.fine("Topic " + topic + " was created concurrently");
+            } else {
+                throw new RuntimeException("Failed to create topic " + topic, e.getCause());
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Interrupted while creating topic " + topic, e);
+        } catch (TimeoutException e) {
+            throw new RuntimeException("Timed out creating topic " + topic, e);
+        }
     }
 
     /**
      * Publishes a spec YAML to Kafka wrapped in an OOCS deliver-spec envelope.
+     * Blocks until the send completes or fails.
      *
      * @param topic      the Kafka topic to publish to
      * @param artifactId the spec artifact ID (e.g. data product or contract ID)
      * @param version    the spec version
      * @param kind       the spec kind ("DataProduct" or "DataContract")
      * @param content    the full YAML content of the spec
+     * @return true if published successfully, false otherwise
      */
-    public void publishSpec(String topic, String artifactId, String version,
-                            String kind, String content) {
+    public boolean publishSpec(String topic, String artifactId, String version,
+                               String kind, String content) {
         String envelope = buildEnvelope(artifactId, version, kind, content);
 
+        log.fine("Sending " + kind + " " + artifactId + " v" + version
+                + " to topic " + topic + " (envelope size: " + envelope.length() + " chars)");
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, artifactId, envelope);
-        producer.send(record, (metadata, exception) -> {
-            if (exception != null) {
-                System.err.println("Failed to publish spec " + artifactId + " to Kafka: "
-                        + exception.getMessage());
-                log.log(Level.WARNING, "Kafka send failed for " + artifactId, exception);
-            } else {
-                log.fine("Published " + artifactId + " to " + metadata.topic()
-                        + " partition " + metadata.partition()
-                        + " offset " + metadata.offset());
-            }
-        });
+        try {
+            var metadata = producer.send(record).get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            log.fine("Published " + artifactId + " to " + metadata.topic()
+                    + " partition " + metadata.partition()
+                    + " offset " + metadata.offset());
+            return true;
+        } catch (Exception e) {
+            Throwable cause = e instanceof ExecutionException ? e.getCause() : e;
+            System.err.println("  Failed to publish " + artifactId + ": " + cause.getMessage());
+            log.log(Level.WARNING, "Kafka send failed for " + artifactId, cause);
+            return false;
+        }
     }
 
     /**

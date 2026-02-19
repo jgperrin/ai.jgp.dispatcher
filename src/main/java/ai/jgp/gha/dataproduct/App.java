@@ -38,8 +38,12 @@ public class App {
 
         // Publish specs to Kafka if configured and Zeenea upload succeeded
         if (success && config.isKafkaConfigured()) {
+            log.fine("Kafka is configured (broker: " + config.getKafkaBroker()
+                    + "), starting spec publishing");
             publishSpecsToKafka(config);
-        } else if (!config.isKafkaConfigured()) {
+        } else if (!success) {
+            log.fine("Zeenea upload failed, skipping Kafka publishing");
+        } else {
             log.fine("Kafka not configured, skipping spec publishing");
         }
 
@@ -55,7 +59,8 @@ public class App {
         System.out.println("Publishing specs to Kafka...");
 
         KafkaPublisher publisher = null;
-        int count = 0;
+        int published = 0;
+        int failed = 0;
 
         try {
             publisher = new KafkaPublisher(
@@ -63,8 +68,11 @@ public class App {
                     config.getKafkaUser(),
                     config.getKafkaPassword());
 
+            publisher.ensureTopicExists(K.KAFKA_TOPIC_SPEC_INGEST);
+
             YAMLMapper yamlMapper = new YAMLMapper();
 
+            log.fine("Opening ZIP file: " + config.getFilePath());
             try (ZipFile zipFile = new ZipFile(config.getFilePath())) {
                 var entries = zipFile.entries();
 
@@ -73,8 +81,12 @@ public class App {
                     String name = entry.getName();
 
                     if (entry.isDirectory() || !name.endsWith(".yaml")) {
+                        log.fine("Skipping ZIP entry: " + name);
                         continue;
                     }
+
+                    log.fine("Processing ZIP entry: " + name
+                            + " (" + entry.getSize() + " bytes)");
 
                     // Read YAML content from the ZIP entry
                     String content;
@@ -111,26 +123,33 @@ public class App {
 
                         artifactId = idNode.asText();
                         version = versionNode.asText();
+                        log.fine("Parsed " + name + ": kind=" + kind
+                                + ", id=" + artifactId + ", version=" + version);
                     } catch (Exception e) {
                         System.err.println("  Warning: failed to parse " + name
                                 + ": " + e.getMessage());
                         continue;
                     }
 
-                    publisher.publishSpec(
+                    boolean ok = publisher.publishSpec(
                             K.KAFKA_TOPIC_SPEC_INGEST,
                             artifactId,
                             version,
                             kind,
                             content);
 
-                    count++;
-                    System.out.println("  Published: " + name
-                            + " (" + kind + " " + artifactId + " v" + version + ")");
+                    if (ok) {
+                        published++;
+                        System.out.println("  Published: " + name
+                                + " (" + kind + " " + artifactId + " v" + version + ")");
+                    } else {
+                        failed++;
+                    }
                 }
             }
 
-            System.out.println("Kafka publishing complete: " + count + " spec(s) published.");
+            System.out.println("Kafka publishing complete: " + published + " published, "
+                    + failed + " failed.");
 
         } catch (Exception e) {
             System.err.println("Error publishing to Kafka: " + e.getMessage());
