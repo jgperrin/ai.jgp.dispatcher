@@ -85,6 +85,14 @@ public class KafkaPublisher {
      *
      * @param topic the topic name to ensure exists
      */
+    /**
+     * Best-effort check: ensures the given topic exists, creating it if
+     * necessary. If the check fails (e.g. network/auth issue), a warning
+     * is logged and publishing proceeds anyway — the producer will fail
+     * later with a clearer error if the topic truly doesn't exist.
+     *
+     * @param topic the topic name to ensure exists
+     */
     public void ensureTopicExists(String topic) {
         log.fine("Checking if topic " + topic + " exists...");
         try (AdminClient admin = AdminClient.create(connectionProps)) {
@@ -106,13 +114,17 @@ public class KafkaPublisher {
             if (e.getCause() instanceof TopicExistsException) {
                 log.fine("Topic " + topic + " was created concurrently");
             } else {
-                throw new RuntimeException("Failed to create topic " + topic, e.getCause());
+                System.err.println("  Warning: could not verify topic " + topic
+                        + ": " + e.getCause().getMessage());
+                log.log(Level.WARNING, "Failed to verify/create topic " + topic, e.getCause());
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new RuntimeException("Interrupted while creating topic " + topic, e);
+            System.err.println("  Warning: interrupted while checking topic " + topic);
         } catch (TimeoutException e) {
-            throw new RuntimeException("Timed out creating topic " + topic, e);
+            System.err.println("  Warning: timed out checking topic " + topic
+                    + ", proceeding anyway");
+            log.warning("Timed out checking topic " + topic + ", will attempt publish regardless");
         }
     }
 
