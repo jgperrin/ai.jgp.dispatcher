@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-02-19
+
+### Added
+- Kafka publishing support: after Zeenea upload, each YAML spec from the ZIP is published to the `controlcenter.spec.ingest` Kafka topic for Control Center ingestion.
+- New `KafkaPublisher` class using plain `kafka-clients` with SASL_SSL + SCRAM-SHA-512 authentication.
+- CLI flags `--kafka-broker`, `--kafka-user`, `--kafka-password` with env var fallbacks (`KAFKA_BROKER_URL`, `KAFKA_USER`, `KAFKA_PASSWORD`).
+- Kafka is optional — publishing is skipped when no broker is configured.
+- OOCS `deliver-spec` envelope wrapping for each published spec.
+- Automatic kind detection from filename (`.odps.yaml` -> DataProduct, `.odcs.yaml` -> DataContract).
+- YAML parsing via Jackson to extract `id` and `version` from each spec.
+- Dependencies: `kafka-clients` 3.8.1, `jackson-dataformat-yaml` 2.17.0.
+
 ## [0.1.6] - 2026-02-10
 
 ### Fixed
