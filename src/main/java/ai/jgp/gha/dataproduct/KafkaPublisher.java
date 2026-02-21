@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
@@ -28,8 +29,10 @@ public class KafkaPublisher {
     private static final int MAX_BLOCK_MS = 10000;
     private static final int REQUEST_TIMEOUT_MS = 10000;
     private static final int DELIVERY_TIMEOUT_MS = 15000;
+    private static final long PROBE_TIMEOUT_SECONDS = 5;
 
     private final KafkaProducer<String, String> producer;
+    private final boolean connected;
 
     public KafkaPublisher(String broker, String user, String password) {
         System.out.println("       Broker: " + broker);
@@ -77,6 +80,24 @@ public class KafkaPublisher {
                 + ", delivery.timeout.ms=" + DELIVERY_TIMEOUT_MS);
         this.producer = new KafkaProducer<>(props);
         log.fine("KafkaProducer created successfully");
+
+        // Probe broker connectivity — forces metadata fetch with a short timeout
+        boolean reachable;
+        try {
+            CompletableFuture.supplyAsync(() -> producer.partitionsFor(K.KAFKA_TOPIC_SPEC_INGEST))
+                    .get(PROBE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            reachable = true;
+            log.fine("Kafka broker is reachable");
+        } catch (Exception e) {
+            reachable = false;
+            Throwable cause = e instanceof ExecutionException ? e.getCause() : e;
+            log.log(Level.WARNING, "Kafka broker unreachable: " + cause.getMessage(), cause);
+        }
+        this.connected = reachable;
+    }
+
+    public boolean isConnected() {
+        return connected;
     }
 
     /**
