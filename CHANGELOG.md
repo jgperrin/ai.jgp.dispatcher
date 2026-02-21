@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.7] - 2026-02-21
+
+### Fixed
+- Suppressed Kafka's verbose internal logging (config dumps, disconnect spam) — only SEVERE errors are logged from `org.apache.kafka`.
+- Reduced Kafka producer timeouts (`max.block.ms=5s`, `request.timeout.ms=5s`, `delivery.timeout.ms=10s`) so the connectivity probe actually cuts off within 5 seconds.
+- `close()` now uses a 2-second timeout instead of blocking indefinitely on flush when broker is unreachable.
+
 ## [0.2.6] - 2026-02-21
 
 ### Fixed
