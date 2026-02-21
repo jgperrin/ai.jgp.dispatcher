@@ -38,9 +38,11 @@ public class KafkaPublisher {
 
     public KafkaPublisher(String broker, String user, String password) {
         String authMode = (user != null && password != null)
-                ? "SASL_SSL (SCRAM-SHA-512, user=" + user + ")"
+                ? "SASL_SSL (SCRAM-SHA-512)"
                 : "PLAINTEXT (no credentials)";
         System.out.println("       Broker:   " + broker);
+        System.out.println("       User:     " + (user != null ? user : "(not set)"));
+        System.out.println("       Password: " + (password != null ? "****" : "(not set)"));
         System.out.println("       Auth:     " + authMode);
         System.out.println("       Topic:    " + K.KAFKA_TOPIC_SPEC_INGEST);
         System.out.println("       Timeout:  " + PROBE_TIMEOUT_SECONDS + "s probe, "
