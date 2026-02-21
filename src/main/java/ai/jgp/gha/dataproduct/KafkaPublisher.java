@@ -37,10 +37,14 @@ public class KafkaPublisher {
     private final boolean connected;
 
     public KafkaPublisher(String broker, String user, String password) {
-        System.out.println("       Broker: " + broker);
-        System.out.println("       Auth:   " + (user != null && password != null
+        String authMode = (user != null && password != null)
                 ? "SASL_SSL (SCRAM-SHA-512, user=" + user + ")"
-                : "PLAINTEXT (no credentials)"));
+                : "PLAINTEXT (no credentials)";
+        System.out.println("       Broker:   " + broker);
+        System.out.println("       Auth:     " + authMode);
+        System.out.println("       Topic:    " + K.KAFKA_TOPIC_SPEC_INGEST);
+        System.out.println("       Timeout:  " + PROBE_TIMEOUT_SECONDS + "s probe, "
+                + (MAX_BLOCK_MS / 1000) + "s max block");
 
         String truststorePath = Path.of(System.getProperty("user.home"), TRUSTSTORE_RELATIVE_PATH).toString();
 
@@ -94,10 +98,15 @@ public class KafkaPublisher {
                     .get(PROBE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
             reachable = true;
             log.fine("Kafka broker is reachable");
+        } catch (java.util.concurrent.TimeoutException e) {
+            reachable = false;
+            System.err.println("       Probe:    broker did not respond within "
+                    + PROBE_TIMEOUT_SECONDS + "s");
         } catch (Exception e) {
             reachable = false;
             Throwable cause = e instanceof ExecutionException ? e.getCause() : e;
-            log.log(Level.WARNING, "Kafka broker unreachable: " + cause.getMessage(), cause);
+            System.err.println("       Probe:    " + cause.getClass().getSimpleName()
+                    + " — " + cause.getMessage());
         }
         this.connected = reachable;
     }
