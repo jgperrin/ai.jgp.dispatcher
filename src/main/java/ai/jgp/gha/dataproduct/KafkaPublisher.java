@@ -7,6 +7,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -25,11 +26,12 @@ public class KafkaPublisher {
 
     private static final String TRUSTSTORE_RELATIVE_PATH = ".kafka/kafka.client.truststore.jks";
     private static final String TRUSTSTORE_PASSWORD = "changeit";
-    private static final long SEND_TIMEOUT_SECONDS = 15;
-    private static final int MAX_BLOCK_MS = 10000;
-    private static final int REQUEST_TIMEOUT_MS = 10000;
-    private static final int DELIVERY_TIMEOUT_MS = 15000;
+    private static final long SEND_TIMEOUT_SECONDS = 10;
+    private static final int MAX_BLOCK_MS = 5000;
+    private static final int REQUEST_TIMEOUT_MS = 5000;
+    private static final int DELIVERY_TIMEOUT_MS = 10000;
     private static final long PROBE_TIMEOUT_SECONDS = 5;
+    private static final long CLOSE_TIMEOUT_SECONDS = 2;
 
     private final KafkaProducer<String, String> producer;
     private final boolean connected;
@@ -78,6 +80,10 @@ public class KafkaPublisher {
         log.fine("Producer config: max.block.ms=" + MAX_BLOCK_MS
                 + ", request.timeout.ms=" + REQUEST_TIMEOUT_MS
                 + ", delivery.timeout.ms=" + DELIVERY_TIMEOUT_MS);
+
+        // Suppress Kafka's verbose internal logging (config dumps, disconnect spam)
+        Logger.getLogger("org.apache.kafka").setLevel(Level.SEVERE);
+
         this.producer = new KafkaProducer<>(props);
         log.fine("KafkaProducer created successfully");
 
@@ -136,8 +142,7 @@ public class KafkaPublisher {
      * Flushes pending records and closes the producer.
      */
     public void close() {
-        producer.flush();
-        producer.close();
+        producer.close(Duration.ofSeconds(CLOSE_TIMEOUT_SECONDS));
     }
 
     /**
