@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.6] - 2026-02-21
+
+### Fixed
+- Kafka connectivity is now probed upfront with a 5-second timeout. If the broker is unreachable, publishing is skipped immediately with a warning instead of hanging per message. Kafka failures no longer block the workflow — they are treated as warnings.
+
 ## [0.2.5] - 2026-02-19
 
 ### Fixed

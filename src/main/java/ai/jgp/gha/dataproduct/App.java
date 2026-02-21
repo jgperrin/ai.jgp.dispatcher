@@ -68,6 +68,11 @@ public class App {
                     config.getKafkaUser(),
                     config.getKafkaPassword());
 
+            if (!publisher.isConnected()) {
+                System.err.println("Warning: Kafka broker is not reachable, skipping spec publishing.");
+                return;
+            }
+
             YAMLMapper yamlMapper = new YAMLMapper();
 
             log.fine("Opening ZIP file: " + config.getFilePath());
