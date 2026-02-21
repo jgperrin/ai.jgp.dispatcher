@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.10] - 2026-02-21
+
+### Changed
+- SSL trust: auto-fetches the broker's server certificate at runtime and creates a temporary JKS truststore. No external truststore file needed. Connection is still TLS-encrypted.
+- Removed static truststore path (`~/.kafka/kafka.client.truststore.jks`) — no longer required.
+- **Tech debt**: certificate verification is relaxed (hostname check disabled, server cert auto-trusted). Replace with proper CA trust management when feasible.
+
 ## [0.2.9] - 2026-02-21
 
 ### Changed
