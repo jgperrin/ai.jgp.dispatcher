@@ -1,18 +1,10 @@
 package ai.jgp.gha.dataproduct;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
-
-import java.io.BufferedReader;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
+import java.io.File;
+import java.nio.file.Files;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.util.stream.Collectors;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
 
 public class App {
 
@@ -36,31 +28,29 @@ public class App {
 
         boolean success = client.upload();
 
-        // Publish specs to Kafka if configured and Zeenea upload succeeded
+        // Publish ZIP to Kafka if configured and Zeenea upload succeeded
         if (success && config.isKafkaConfigured()) {
             log.fine("Kafka is configured (broker: " + config.getKafkaBroker()
-                    + "), starting spec publishing");
-            publishSpecsToKafka(config);
+                    + "), starting ZIP publishing");
+            publishZipToKafka(config);
         } else if (!success) {
             log.fine("Zeenea upload failed, skipping Kafka publishing");
         } else {
-            log.fine("Kafka not configured, skipping spec publishing");
+            log.fine("Kafka not configured, skipping Kafka publishing");
         }
 
         System.exit(success ? 0 : 1);
     }
 
     /**
-     * Opens the ZIP file and publishes each YAML entry to the Kafka spec
-     * ingest topic.
+     * Reads the ZIP file and publishes it as a single binary message to the
+     * Kafka spec ingest topic.
      */
-    private static void publishSpecsToKafka(CliConfig config) {
+    private static void publishZipToKafka(CliConfig config) {
         System.out.println();
-        System.out.println("Publishing specs to Kafka...");
+        System.out.println("Publishing ZIP to Kafka...");
 
         KafkaPublisher publisher = null;
-        int published = 0;
-        int failed = 0;
 
         try {
             publisher = new KafkaPublisher(
@@ -69,90 +59,26 @@ public class App {
                     config.getKafkaPassword());
 
             if (!publisher.isConnected()) {
-                System.err.println("Warning: Kafka broker is not reachable, skipping spec publishing.");
+                System.err.println("Warning: Kafka broker is not reachable, skipping ZIP publishing.");
                 return;
             }
 
-            YAMLMapper yamlMapper = new YAMLMapper();
+            File zipFile = new File(config.getFilePath());
+            byte[] zipData = Files.readAllBytes(zipFile.toPath());
+            String key = zipFile.getName();
 
-            log.fine("Opening ZIP file: " + config.getFilePath());
-            try (ZipFile zipFile = new ZipFile(config.getFilePath())) {
-                var entries = zipFile.entries();
+            log.fine("Read ZIP file: " + key + " (" + zipData.length + " bytes)");
 
-                while (entries.hasMoreElements()) {
-                    ZipEntry entry = entries.nextElement();
-                    String name = entry.getName();
+            boolean ok = publisher.publishZip(
+                    K.KAFKA_TOPIC_SPEC_INGEST,
+                    key,
+                    zipData);
 
-                    if (entry.isDirectory() || !name.endsWith(".yaml")) {
-                        log.fine("Skipping ZIP entry: " + name);
-                        continue;
-                    }
-
-                    log.fine("Processing ZIP entry: " + name
-                            + " (" + entry.getSize() + " bytes)");
-
-                    // Read YAML content from the ZIP entry
-                    String content;
-                    try (InputStream is = zipFile.getInputStream(entry);
-                         BufferedReader reader = new BufferedReader(
-                                 new InputStreamReader(is, StandardCharsets.UTF_8))) {
-                        content = reader.lines().collect(Collectors.joining("\n"));
-                    }
-
-                    // Detect kind from filename
-                    String kind;
-                    if (name.endsWith(".odps.yaml")) {
-                        kind = "DataProduct";
-                    } else if (name.endsWith(".odcs.yaml")) {
-                        kind = "DataContract";
-                    } else {
-                        log.fine("Skipping unknown YAML type: " + name);
-                        continue;
-                    }
-
-                    // Parse YAML to extract id and version
-                    String artifactId;
-                    String version;
-                    try {
-                        JsonNode root = yamlMapper.readTree(content);
-                        JsonNode idNode = root.path("id");
-                        JsonNode versionNode = root.path("version");
-
-                        if (idNode.isMissingNode() || versionNode.isMissingNode()) {
-                            System.err.println("  Warning: skipping " + name
-                                    + " (missing id or version field)");
-                            continue;
-                        }
-
-                        artifactId = idNode.asText();
-                        version = versionNode.asText();
-                        log.fine("Parsed " + name + ": kind=" + kind
-                                + ", id=" + artifactId + ", version=" + version);
-                    } catch (Exception e) {
-                        System.err.println("  Warning: failed to parse " + name
-                                + ": " + e.getMessage());
-                        continue;
-                    }
-
-                    boolean ok = publisher.publishSpec(
-                            K.KAFKA_TOPIC_SPEC_INGEST,
-                            artifactId,
-                            version,
-                            kind,
-                            content);
-
-                    if (ok) {
-                        published++;
-                        System.out.println("  Published: " + name
-                                + " (" + kind + " " + artifactId + " " + version + ")");
-                    } else {
-                        failed++;
-                    }
-                }
+            if (ok) {
+                System.out.println("  Published: " + key + " (" + zipData.length + " bytes)");
+            } else {
+                System.err.println("  Failed to publish ZIP to Kafka.");
             }
-
-            System.out.println("Kafka publishing complete: " + published + " published, "
-                    + failed + " failed.");
 
         } catch (Exception e) {
             System.err.println("Error publishing to Kafka: " + e.getMessage());

@@ -3,6 +3,7 @@ package ai.jgp.gha.dataproduct;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 
 import javax.net.ssl.SSLContext;
@@ -18,7 +19,6 @@ import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.Properties;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -26,7 +26,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Publishes YAML spec files to Kafka using the plain kafka-clients library.
+ * Publishes ZIP spec bundles to Kafka using the plain kafka-clients library.
  * Configures SASL_SSL with SCRAM-SHA-512 authentication.
  */
 public class KafkaPublisher {
@@ -40,7 +40,7 @@ public class KafkaPublisher {
     private static final long PROBE_TIMEOUT_SECONDS = 5;
     private static final long CLOSE_TIMEOUT_SECONDS = 2;
 
-    private final KafkaProducer<String, String> producer;
+    private final KafkaProducer<String, byte[]> producer;
     private final boolean connected;
 
     public KafkaPublisher(String broker, String user, String password) {
@@ -58,7 +58,7 @@ public class KafkaPublisher {
         Properties props = new Properties();
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, broker);
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         props.put(ProducerConfig.ACKS_CONFIG, "all");
 
         // Shorter timeouts for faster failure diagnostics
@@ -129,33 +129,28 @@ public class KafkaPublisher {
     }
 
     /**
-     * Publishes a spec YAML to Kafka wrapped in an OOCS deliver-spec envelope.
+     * Publishes a ZIP bundle to Kafka as a single binary message.
      * Blocks until the send completes or fails.
      *
-     * @param topic      the Kafka topic to publish to
-     * @param artifactId the spec artifact ID (e.g. data product or contract ID)
-     * @param version    the spec version
-     * @param kind       the spec kind ("DataProduct" or "DataContract")
-     * @param content    the full YAML content of the spec
+     * @param topic   the Kafka topic to publish to
+     * @param key     the message key (e.g. ZIP filename)
+     * @param zipData the raw ZIP bytes
      * @return true if published successfully, false otherwise
      */
-    public boolean publishSpec(String topic, String artifactId, String version,
-                               String kind, String content) {
-        String envelope = buildEnvelope(artifactId, version, kind, content);
-
-        log.fine("Sending " + kind + " " + artifactId + " v" + version
-                + " to topic " + topic + " (envelope size: " + envelope.length() + " chars)");
-        ProducerRecord<String, String> record = new ProducerRecord<>(topic, artifactId, envelope);
+    public boolean publishZip(String topic, String key, byte[] zipData) {
+        log.fine("Sending ZIP to topic " + topic + " (key: " + key
+                + ", size: " + zipData.length + " bytes)");
+        ProducerRecord<String, byte[]> record = new ProducerRecord<>(topic, key, zipData);
         try {
             var metadata = producer.send(record).get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-            log.fine("Published " + artifactId + " to " + metadata.topic()
+            log.fine("Published ZIP to " + metadata.topic()
                     + " partition " + metadata.partition()
                     + " offset " + metadata.offset());
             return true;
         } catch (Exception e) {
             Throwable cause = e instanceof ExecutionException ? e.getCause() : e;
-            System.err.println("  Failed to publish " + artifactId + ": " + cause.getMessage());
-            log.log(Level.WARNING, "Kafka send failed for " + artifactId, cause);
+            System.err.println("  Failed to publish ZIP: " + cause.getMessage());
+            log.log(Level.WARNING, "Kafka send failed for ZIP", cause);
             return false;
         }
     }
@@ -211,36 +206,5 @@ public class KafkaPublisher {
             ks.store(os, "changeit".toCharArray());
         }
         return tempFile.toAbsolutePath().toString();
-    }
-
-    /**
-     * Builds an OOCS deliver-spec envelope as a YAML string.
-     */
-    static String buildEnvelope(String artifactId, String version,
-                                String kind, String content) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("kind: \"OrchestrationControl\"\n");
-        sb.append("apiVersion: \"v0.1.0\"\n");
-        sb.append("id: \"").append(UUID.randomUUID()).append("\"\n");
-        sb.append("version: \"1.0.0\"\n");
-        sb.append("actions:\n");
-        sb.append("- id: \"deliver-spec\"\n");
-        sb.append("  type: \"deliver-spec\"\n");
-        sb.append("  payload:\n");
-        sb.append("    kind: \"").append(kind).append("\"\n");
-        sb.append("    id: \"").append(artifactId).append("\"\n");
-        sb.append("    version: \"").append(version).append("\"\n");
-        sb.append("    content: |\n");
-
-        // Indent each line of the YAML content by 6 spaces for the YAML block scalar
-        for (String line : content.split("\n", -1)) {
-            if (line.isEmpty()) {
-                sb.append("\n");
-            } else {
-                sb.append("      ").append(line).append("\n");
-            }
-        }
-
-        return sb.toString();
     }
 }
