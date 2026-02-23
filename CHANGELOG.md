@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.14] - 2026-02-23
+
+### Added
+- Smart ZIP building: `--file` now accepts a `.odps.yaml` product file. The uploader parses the product, resolves contract references from `outputPorts`, and builds a versioned ZIP containing only the product and its contracts (e.g. `<id>-v<version>.odps.yaml`, `<contractId>-v<portVersion>.odcs.yaml`).
+- New `ZipBuilder` class for versioned ZIP construction from product YAML.
+
+### Changed
+- GHA workflow template now uses `git diff` to detect changed product files and processes each one individually (instead of zipping all files in `podem/`).
+- Re-added `jackson-dataformat-yaml` dependency for YAML parsing in ZipBuilder.
+
 ## [0.2.13] - 2026-02-23
 
 ### Changed

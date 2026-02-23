@@ -154,7 +154,7 @@ public class CliConfig {
         System.out.println("Usage: java -jar data-product-uploader.jar [options]");
         System.out.println();
         System.out.println("Options:");
-        System.out.println("  --file <path>           Path to the ZIP file (required)");
+        System.out.println("  --file <path>           Path to ZIP or .odps.yaml file (required)");
         System.out.println("  --tenant <name>         Zeenea tenant name (required)");
         System.out.println("  --api-key <key>         API key secret (required)");
         System.out.println("  --catalog <code>        Catalog code (default: \"default\")");
@@ -218,5 +218,12 @@ public class CliConfig {
      */
     public boolean isKafkaConfigured() {
         return kafkaBroker != null;
+    }
+
+    /**
+     * Returns true if the input file is a product YAML (not a pre-built ZIP).
+     */
+    public boolean isProductYaml() {
+        return filePath != null && filePath.endsWith(".odps.yaml");
     }
 }
