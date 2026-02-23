@@ -23,7 +23,8 @@ import java.util.zip.ZipOutputStream;
  *   <li>{contractId}-v{portVersion}.odcs.yaml for each output port</li>
  * </ul>
  * Contract content is retrieved at the correct version using git tags
- * (format: {contractId}-v{version}).
+ * (format: contract-{contractId}-v{version}, as created by the bitol
+ * service's v3 enhanced publish).
  */
 public class ZipBuilder {
 
@@ -87,8 +88,9 @@ public class ZipBuilder {
                         continue;
                     }
 
-                    // Tag format: <contractId>-v<version>
-                    String tag = contractId + "-v" + portVersion;
+                    // Tag format: contract-<contractId>-v<version>
+                    // (matches GitHubService.buildTagName("contract", id, version))
+                    String tag = "contract-" + contractId + "-v" + portVersion;
                     String gitPath = relativeDir + "/" + contractId + ".odcs.yaml";
 
                     // Try to retrieve the contract at the tagged version
@@ -121,7 +123,7 @@ public class ZipBuilder {
     /**
      * Retrieves file content at a specific git tag using {@code git show}.
      *
-     * @param tag  the git tag (e.g. "a7403a03-...-v1.0.4")
+     * @param tag  the git tag (e.g. "contract-a7403a03-...-v1.0.4")
      * @param path the file path relative to the repo root
      * @return file content as bytes, or null if the tag/file doesn't exist
      */
