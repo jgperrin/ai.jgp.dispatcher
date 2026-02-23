@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.15] - 2026-02-23
+
+### Changed
+- Contract content is now retrieved at the correct version using git tags (format: `<contractId>-v<version>`). Falls back to current file on disk if the tag is not found.
+- GHA workflow now checks out with full history and tags (`fetch-depth: 0`, `fetch-tags: true`) to support versioned contract retrieval.
+
 ## [0.2.14] - 2026-02-23
 
 ### Added

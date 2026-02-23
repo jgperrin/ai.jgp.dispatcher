@@ -14,11 +14,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Check out the repository (with history to detect changed files)
+      # 1. Check out the repository (full history + tags for versioned contract retrieval)
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
+          fetch-tags: true
 
       # 2. Set up Java 21
       - name: Set up Java 21
