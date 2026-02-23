@@ -144,7 +144,7 @@ public class App {
                     if (ok) {
                         published++;
                         System.out.println("  Published: " + name
-                                + " (" + kind + " " + artifactId + " v" + version + ")");
+                                + " (" + kind + " " + artifactId + " " + version + ")");
                     } else {
                         failed++;
                     }
