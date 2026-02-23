@@ -14,9 +14,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Check out the repository
+      # 1. Check out the repository (full history + tags for versioned contract retrieval)
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       # 2. Set up Java 21
       - name: Set up Java 21
@@ -35,16 +38,8 @@ jobs:
       - name: Build uploader
         run: mvn -q -f uploader/pom.xml clean package
 
-      # 4. Package spec files into a ZIP
-      - name: Package spec files
-        run: |
-          cd podem
-          zip -r ../data-products.zip *.odps.yaml *.odcs.yaml
-          cd ..
-          echo "Packaged $(zipinfo -1 data-products.zip | wc -l) file(s) into data-products.zip"
-
-      # 5. Upload to Zeenea and publish to Kafka
-      - name: Upload and publish
+      # 4. Find changed product files and upload each one
+      - name: Upload changed products
         env:
           ZEENEA_API_KEY: ${{ secrets.ZEENEA_API_KEY }}
           ZEENEA_TENANT: ${{ secrets.ZEENEA_TENANT }}
@@ -54,5 +49,26 @@ jobs:
           KAFKA_USERNAME: ${{ secrets.KAFKA_USERNAME }}
           KAFKA_PASSWORD: ${{ secrets.KAFKA_PASSWORD }}
         run: |
-          java -jar uploader/target/data-product-uploader-*.jar \
-            --file data-products.zip
+          # Find .odps.yaml files changed in the last commit
+          CHANGED=$(git diff --name-only HEAD~1 HEAD -- 'podem/**/*.odps.yaml')
+
+          if [ -z "$CHANGED" ]; then
+            echo "No product files changed, nothing to upload."
+            exit 0
+          fi
+
+          echo "Changed product files:"
+          echo "$CHANGED"
+          echo ""
+
+          FAIL=0
+          for PRODUCT in $CHANGED; do
+            echo "=========================================="
+            echo "Processing: $PRODUCT"
+            echo "=========================================="
+            java -jar uploader/target/data-product-uploader-*.jar \
+              --file "$PRODUCT" || FAIL=1
+            echo ""
+          done
+
+          exit $FAIL

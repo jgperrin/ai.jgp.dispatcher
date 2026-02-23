@@ -2,6 +2,7 @@ package ai.jgp.gha.dataproduct;
 
 import java.io.File;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -24,7 +25,21 @@ public class App {
             root.addHandler(handler);
         }
 
-        ZeeneaClient client = new ZeeneaClient(config);
+        // If input is a product YAML, build a versioned ZIP first
+        String zipPath = config.getFilePath();
+        if (config.isProductYaml()) {
+            try {
+                Path builtZip = ZipBuilder.buildFromProduct(config.getFilePath());
+                zipPath = builtZip.toAbsolutePath().toString();
+                System.out.println();
+            } catch (Exception e) {
+                System.err.println("Error building ZIP from product YAML: " + e.getMessage());
+                log.log(Level.SEVERE, "ZipBuilder failed", e);
+                System.exit(1);
+            }
+        }
+
+        ZeeneaClient client = new ZeeneaClient(config, zipPath);
 
         boolean success = client.upload();
 
@@ -32,7 +47,7 @@ public class App {
         if (success && config.isKafkaConfigured()) {
             log.fine("Kafka is configured (broker: " + config.getKafkaBroker()
                     + "), starting ZIP publishing");
-            publishZipToKafka(config);
+            publishZipToKafka(config, zipPath);
         } else if (!success) {
             log.fine("Zeenea upload failed, skipping Kafka publishing");
         } else {
@@ -46,7 +61,7 @@ public class App {
      * Reads the ZIP file and publishes it as a single binary message to the
      * Kafka spec ingest topic.
      */
-    private static void publishZipToKafka(CliConfig config) {
+    private static void publishZipToKafka(CliConfig config, String zipPath) {
         System.out.println();
         System.out.println("Publishing ZIP to Kafka...");
 
@@ -63,7 +78,7 @@ public class App {
                 return;
             }
 
-            File zipFile = new File(config.getFilePath());
+            File zipFile = new File(zipPath);
             byte[] zipData = Files.readAllBytes(zipFile.toPath());
             String key = zipFile.getName();
 

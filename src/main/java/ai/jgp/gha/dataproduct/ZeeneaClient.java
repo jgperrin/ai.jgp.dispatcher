@@ -20,10 +20,16 @@ public class ZeeneaClient {
     private static final Logger log = Logger.getLogger(ZeeneaClient.class.getName());
 
     private final CliConfig config;
+    private final String zipPath;
     private final HttpClient httpClient;
 
     public ZeeneaClient(CliConfig config) {
+        this(config, config.getFilePath());
+    }
+
+    public ZeeneaClient(CliConfig config, String zipPath) {
         this.config = config;
+        this.zipPath = zipPath;
         this.httpClient = HttpClient.newHttpClient();
     }
 
@@ -35,7 +41,7 @@ public class ZeeneaClient {
     public boolean upload() {
         try {
             log.fine("Base URL: " + config.getBaseUrl());
-            log.fine("File: " + config.getFilePath());
+            log.fine("File: " + zipPath);
             log.fine("Catalog: " + config.getCatalogCode());
 
             // Step 1: Request upload URL
@@ -45,7 +51,7 @@ public class ZeeneaClient {
             System.out.println("       Max file size: " + (uploadResponse.getMaxFileSize() / 1024 / 1024) + " MB");
 
             // Validate file size
-            long fileSize = Files.size(Path.of(config.getFilePath()));
+            long fileSize = Files.size(Path.of(zipPath));
             if (fileSize > uploadResponse.getMaxFileSize()) {
                 System.err.println("Error: file size (" + fileSize + " bytes) exceeds maximum ("
                         + uploadResponse.getMaxFileSize() + " bytes)");
@@ -97,7 +103,7 @@ public class ZeeneaClient {
     }
 
     void uploadFile(UploadResponse uploadResponse) throws IOException, InterruptedException {
-        byte[] fileBytes = Files.readAllBytes(Path.of(config.getFilePath()));
+        byte[] fileBytes = Files.readAllBytes(Path.of(zipPath));
         log.fine(">> PUT " + uploadResponse.getUrl());
         log.fine(">> File size: " + fileBytes.length + " bytes");
 
