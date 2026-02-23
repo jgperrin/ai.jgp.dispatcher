@@ -1,10 +1,11 @@
 name: Upload Data Products
 
-# Trigger: when spec files in podem/ are changed on main
+# Trigger: when spec files in podem/ are changed on main or dev
 on:
   push:
     branches:
       - main
+      - dev
     paths:
       - 'podem/**/*.odps.yaml'
       - 'podem/**/*.odcs.yaml'
