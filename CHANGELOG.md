@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.13] - 2026-02-23
+
+### Changed
+- Kafka publishing now sends the entire ZIP as a single binary message instead of individual YAML specs. Removes per-file YAML parsing and OOCS envelope wrapping.
+- Removed `jackson-dataformat-yaml` dependency (no longer needed).
+- ZIP files should use versioned filenames: `<id>-v<version>.odps.yaml` / `<id>-v<version>.odcs.yaml`.
+
 ## [0.2.12] - 2026-02-23
 
 ### Changed
