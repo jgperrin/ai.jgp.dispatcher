@@ -50,68 +50,9 @@ If you want the uploader to publish specs to the Data Product Control Center via
 
 ## Step 2: Create the Workflow File
 
-In your repository, create the file `.github/workflows/upload-data-products.yml` with the following content:
+Copy [`upload-data-products.yml`](upload-data-products.yml) from this repository into your project at `.github/workflows/upload-data-products.yml`.
 
-```yaml
-name: Upload Data Products
-
-# Trigger: when spec files in podem/ are changed on main
-on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'podem/**/*.odps.yaml'
-      - 'podem/**/*.odcs.yaml'
-
-jobs:
-  upload:
-    runs-on: ubuntu-latest
-
-    steps:
-      # 1. Check out the repository
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      # 2. Set up Java 21
-      - name: Set up Java 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '21'
-
-      # 3. Check out the uploader tool (public repo)
-      - name: Checkout uploader
-        uses: actions/checkout@v4
-        with:
-          repository: jgperrin/ai.jgp.gha.data-product-uploader
-          path: uploader
-
-      - name: Build uploader
-        run: mvn -q -f uploader/pom.xml clean package
-
-      # 4. Package spec files into a ZIP
-      - name: Package spec files
-        run: |
-          cd podem
-          zip -r ../data-products.zip *.odps.yaml *.odcs.yaml
-          cd ..
-          echo "Packaged $(zipinfo -1 data-products.zip | wc -l) file(s) into data-products.zip"
-
-      # 5. Upload to Zeenea and publish to Kafka
-      - name: Upload and publish
-        env:
-          ZEENEA_API_KEY: ${{ secrets.ZEENEA_API_KEY }}
-          ZEENEA_TENANT: ${{ secrets.ZEENEA_TENANT }}
-          ZEENEA_URL: ${{ secrets.ZEENEA_URL }}
-          ZEENEA_CATALOG: ${{ secrets.ZEENEA_CATALOG }}
-          KAFKA_BROKER_URL: ${{ secrets.KAFKA_BROKER_URL }}
-          KAFKA_USERNAME: ${{ secrets.KAFKA_USERNAME }}
-          KAFKA_PASSWORD: ${{ secrets.KAFKA_PASSWORD }}
-        run: |
-          java -jar uploader/target/data-product-uploader-*.jar \
-            --file data-products.zip
-```
+The Workbench can also install this workflow automatically via the Settings page.
 
 ## Step 3: Commit and Push the Workflow
 
