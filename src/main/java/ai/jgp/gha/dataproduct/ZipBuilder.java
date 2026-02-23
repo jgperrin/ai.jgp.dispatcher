@@ -10,6 +10,8 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
@@ -194,6 +196,47 @@ public class ZipBuilder {
         zos.putNextEntry(new ZipEntry(name));
         zos.write(data);
         zos.closeEntry();
+    }
+
+    /**
+     * Finds .odps.yaml product files changed in the last commit within the
+     * given directory, using {@code git diff --name-only HEAD~1 HEAD}.
+     *
+     * @param dirPath directory to scan (e.g. "podem/")
+     * @return list of paths to changed product files (may be empty)
+     */
+    public static List<String> findChangedProducts(String dirPath) {
+        List<String> changed = new ArrayList<>();
+        try {
+            ProcessBuilder pb = new ProcessBuilder(
+                    "git", "diff", "--name-only", "HEAD~1", "HEAD",
+                    "--", dirPath + "/**/*.odps.yaml");
+            pb.redirectErrorStream(false);
+            Process process = pb.start();
+
+            try (var reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (!line.isBlank()) {
+                        changed.add(line);
+                    }
+                }
+            }
+
+            // Consume stderr
+            try (var es = process.getErrorStream();
+                 var reader = new BufferedReader(new InputStreamReader(es))) {
+                String err = reader.lines().collect(Collectors.joining("\n"));
+                if (!err.isEmpty()) {
+                    log.fine("git diff stderr: " + err);
+                }
+            }
+
+            process.waitFor();
+        } catch (Exception e) {
+            log.fine("git diff failed: " + e.getMessage());
+        }
+        return changed;
     }
 
     /**

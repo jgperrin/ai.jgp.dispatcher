@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-02-23
+
+### Added
+- `--dir` flag to scan a directory for changed `.odps.yaml` files using `git diff` (replaces shell-based detection).
+- Directory mode processes each changed product individually: builds versioned ZIP, uploads to Zeenea, publishes to Kafka.
+
+### Changed
+- GHA workflow template simplified to a single `java -jar ... --dir podem` command — all logic now in Java.
+
 ## [0.3.0] - 2026-02-23
 
 ### Changed
