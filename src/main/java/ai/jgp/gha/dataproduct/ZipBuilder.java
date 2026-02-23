@@ -202,23 +202,28 @@ public class ZipBuilder {
      * Finds .odps.yaml product files changed in the last commit within the
      * given directory, using {@code git diff --name-only HEAD~1 HEAD}.
      *
-     * @param dirPath directory to scan (e.g. "podem/")
+     * @param dirPath directory to scan (e.g. "podem")
      * @return list of paths to changed product files (may be empty)
      */
     public static List<String> findChangedProducts(String dirPath) {
         List<String> changed = new ArrayList<>();
         try {
-            ProcessBuilder pb = new ProcessBuilder(
-                    "git", "diff", "--name-only", "HEAD~1", "HEAD",
-                    "--", dirPath + "/**/*.odps.yaml");
+            // Get all changed files under the directory, filter by extension in Java.
+            // Using just the directory path avoids glob issues with ProcessBuilder.
+            List<String> cmd = List.of(
+                    "git", "diff", "--name-only", "HEAD~1", "HEAD", "--", dirPath);
+            System.out.println("Running: " + String.join(" ", cmd));
+
+            ProcessBuilder pb = new ProcessBuilder(cmd);
             pb.redirectErrorStream(false);
             Process process = pb.start();
 
+            List<String> allChanged = new ArrayList<>();
             try (var reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     if (!line.isBlank()) {
-                        changed.add(line);
+                        allChanged.add(line);
                     }
                 }
             }
@@ -228,13 +233,26 @@ public class ZipBuilder {
                  var reader = new BufferedReader(new InputStreamReader(es))) {
                 String err = reader.lines().collect(Collectors.joining("\n"));
                 if (!err.isEmpty()) {
-                    log.fine("git diff stderr: " + err);
+                    System.err.println("git diff stderr: " + err);
                 }
             }
 
-            process.waitFor();
+            int exitCode = process.waitFor();
+            System.out.println("git diff exit code: " + exitCode
+                    + ", files changed in " + dirPath + ": " + allChanged.size());
+
+            for (String file : allChanged) {
+                System.out.println("  changed: " + file);
+                if (file.endsWith(".odps.yaml")) {
+                    changed.add(file);
+                }
+            }
+
+            if (!changed.isEmpty()) {
+                System.out.println("Product files to process: " + changed.size());
+            }
         } catch (Exception e) {
-            log.fine("git diff failed: " + e.getMessage());
+            System.err.println("git diff failed: " + e.getMessage());
         }
         return changed;
     }

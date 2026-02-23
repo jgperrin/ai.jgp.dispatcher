@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] - 2026-02-23
+
+### Fixed
+- Fixed `--dir` mode: glob pattern `podem/**/*.odps.yaml` was not matching files via `ProcessBuilder` (no shell expansion). Now passes just the directory to `git diff` and filters `.odps.yaml` in Java.
+- Added diagnostic output: prints git diff command, exit code, all changed files, and product files to process.
+
 ## [0.3.1] - 2026-02-23
 
 ### Added
