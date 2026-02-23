@@ -39,7 +39,7 @@ jobs:
       - name: Build uploader
         run: mvn -q -f uploader/pom.xml clean package
 
-      # 4. Find changed product files and upload each one
+      # 4. Upload changed products (git diff + smart ZIP building handled in Java)
       - name: Upload changed products
         env:
           ZEENEA_API_KEY: ${{ secrets.ZEENEA_API_KEY }}
@@ -49,27 +49,4 @@ jobs:
           KAFKA_BROKER_URL: ${{ secrets.KAFKA_BROKER_URL }}
           KAFKA_USERNAME: ${{ secrets.KAFKA_USERNAME }}
           KAFKA_PASSWORD: ${{ secrets.KAFKA_PASSWORD }}
-        run: |
-          # Find .odps.yaml files changed in the last commit
-          CHANGED=$(git diff --name-only HEAD~1 HEAD -- 'podem/**/*.odps.yaml')
-
-          if [ -z "$CHANGED" ]; then
-            echo "No product files changed, nothing to upload."
-            exit 0
-          fi
-
-          echo "Changed product files:"
-          echo "$CHANGED"
-          echo ""
-
-          FAIL=0
-          for PRODUCT in $CHANGED; do
-            echo "=========================================="
-            echo "Processing: $PRODUCT"
-            echo "=========================================="
-            java -jar uploader/target/data-product-uploader-*.jar \
-              --file "$PRODUCT" || FAIL=1
-            echo ""
-          done
-
-          exit $FAIL
+        run: java -jar uploader/target/data-product-uploader-*.jar --dir podem

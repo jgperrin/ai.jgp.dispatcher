@@ -6,6 +6,7 @@ import java.nio.file.Path;
 public class CliConfig {
 
     private final String filePath;
+    private final String dirPath;
     private final String tenant;
     private final String apiKey;
     private final String catalogCode;
@@ -15,10 +16,11 @@ public class CliConfig {
     private final String kafkaUser;
     private final String kafkaPassword;
 
-    private CliConfig(String filePath, String tenant, String apiKey,
+    private CliConfig(String filePath, String dirPath, String tenant, String apiKey,
                       String catalogCode, String baseUrl, boolean debug,
                       String kafkaBroker, String kafkaUser, String kafkaPassword) {
         this.filePath = filePath;
+        this.dirPath = dirPath;
         this.tenant = tenant;
         this.apiKey = apiKey;
         this.catalogCode = catalogCode;
@@ -31,6 +33,7 @@ public class CliConfig {
 
     public static CliConfig parse(String[] args) {
         String file = null;
+        String dir = null;
         String tenant = null;
         String apiKey = null;
         String catalog = null;
@@ -44,6 +47,9 @@ public class CliConfig {
             switch (args[i]) {
                 case "--file":
                     file = nextArg(args, i++, "--file");
+                    break;
+                case "--dir":
+                    dir = nextArg(args, i++, "--dir");
                     break;
                 case "--tenant":
                     tenant = nextArg(args, i++, "--tenant");
@@ -88,6 +94,7 @@ public class CliConfig {
 
         // Fall back to environment variables (treat blank as unset)
         if (file == null) file = envOrNull(K.ENV_FILE);
+        if (dir == null) dir = envOrNull(K.ENV_DIR);
         if (tenant == null) tenant = envOrNull(K.ENV_TENANT);
         if (apiKey == null) apiKey = envOrNull(K.ENV_API_KEY);
         if (catalog == null) catalog = envOrNull(K.ENV_CATALOG);
@@ -99,8 +106,14 @@ public class CliConfig {
 
         // Validate required fields
         boolean valid = true;
-        if (file == null || file.isBlank()) {
-            System.err.println("Error: --file is required (or set ZEENEA_FILE)");
+        boolean hasFile = file != null && !file.isBlank();
+        boolean hasDir = dir != null && !dir.isBlank();
+        if (!hasFile && !hasDir) {
+            System.err.println("Error: --file or --dir is required (or set ZEENEA_FILE / ZEENEA_DIR)");
+            valid = false;
+        }
+        if (hasFile && hasDir) {
+            System.err.println("Error: --file and --dir are mutually exclusive");
             valid = false;
         }
         if (tenant == null || tenant.isBlank()) {
@@ -116,9 +129,13 @@ public class CliConfig {
             System.exit(1);
         }
 
-        // Validate file exists
-        if (!Files.exists(Path.of(file))) {
+        // Validate file/dir exists
+        if (hasFile && !Files.exists(Path.of(file))) {
             System.err.println("Error: file not found: " + file);
+            System.exit(1);
+        }
+        if (hasDir && !Files.isDirectory(Path.of(dir))) {
+            System.err.println("Error: directory not found: " + dir);
             System.exit(1);
         }
 
@@ -129,7 +146,7 @@ public class CliConfig {
             baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
         }
 
-        return new CliConfig(file, tenant, apiKey, catalog, baseUrl, debug,
+        return new CliConfig(file, dir, tenant, apiKey, catalog, baseUrl, debug,
                 kafkaBroker, kafkaUser, kafkaPassword);
     }
 
@@ -154,7 +171,8 @@ public class CliConfig {
         System.out.println("Usage: java -jar data-product-uploader.jar [options]");
         System.out.println();
         System.out.println("Options:");
-        System.out.println("  --file <path>           Path to ZIP or .odps.yaml file (required)");
+        System.out.println("  --file <path>           Path to ZIP or .odps.yaml file");
+        System.out.println("  --dir <path>            Directory to scan for changed .odps.yaml files");
         System.out.println("  --tenant <name>         Zeenea tenant name (required)");
         System.out.println("  --api-key <key>         API key secret (required)");
         System.out.println("  --catalog <code>        Catalog code (default: \"default\")");
@@ -166,8 +184,11 @@ public class CliConfig {
         System.out.println("  --version, -v           Show version");
         System.out.println("  --help, -h              Show this help");
         System.out.println();
+        System.out.println("Either --file or --dir is required.");
+        System.out.println();
         System.out.println("Environment variables:");
         System.out.println("  ZEENEA_FILE         Fallback for --file");
+        System.out.println("  ZEENEA_DIR          Fallback for --dir");
         System.out.println("  ZEENEA_TENANT       Fallback for --tenant");
         System.out.println("  ZEENEA_API_KEY      Fallback for --api-key");
         System.out.println("  ZEENEA_CATALOG      Fallback for --catalog");
@@ -179,6 +200,10 @@ public class CliConfig {
 
     public String getFilePath() {
         return filePath;
+    }
+
+    public String getDirPath() {
+        return dirPath;
     }
 
     public String getTenant() {
@@ -218,6 +243,13 @@ public class CliConfig {
      */
     public boolean isKafkaConfigured() {
         return kafkaBroker != null;
+    }
+
+    /**
+     * Returns true if running in directory mode (--dir).
+     */
+    public boolean isDirMode() {
+        return dirPath != null;
     }
 
     /**

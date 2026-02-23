@@ -3,6 +3,7 @@ package ai.jgp.gha.dataproduct;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -25,7 +26,85 @@ public class App {
             root.addHandler(handler);
         }
 
-        // If input is a product YAML, build a versioned ZIP first
+        if (config.isDirMode()) {
+            System.exit(processDirectory(config));
+        } else {
+            System.exit(processSingleFile(config) ? 0 : 1);
+        }
+    }
+
+    /**
+     * Directory mode: uses git diff to find changed .odps.yaml files,
+     * then processes each one.
+     *
+     * @return exit code (0 = all succeeded, 1 = at least one failure)
+     */
+    private static int processDirectory(CliConfig config) {
+        List<String> changed = ZipBuilder.findChangedProducts(config.getDirPath());
+
+        if (changed.isEmpty()) {
+            System.out.println("No product files changed, nothing to upload.");
+            return 0;
+        }
+
+        System.out.println("Changed product files:");
+        for (String f : changed) {
+            System.out.println("  " + f);
+        }
+        System.out.println();
+
+        int succeeded = 0;
+        int failed = 0;
+
+        for (String productFile : changed) {
+            System.out.println("==========================================");
+            System.out.println("Processing: " + productFile);
+            System.out.println("==========================================");
+
+            boolean ok = processProduct(config, productFile);
+            if (ok) {
+                succeeded++;
+            } else {
+                failed++;
+            }
+            System.out.println();
+        }
+
+        System.out.println("Summary: " + succeeded + " succeeded, " + failed + " failed"
+                + " (out of " + changed.size() + " products)");
+
+        return failed > 0 ? 1 : 0;
+    }
+
+    /**
+     * Processes a single product YAML: builds ZIP, uploads to Zeenea,
+     * publishes to Kafka.
+     */
+    private static boolean processProduct(CliConfig config, String productFile) {
+        try {
+            Path builtZip = ZipBuilder.buildFromProduct(productFile);
+            String zipPath = builtZip.toAbsolutePath().toString();
+            System.out.println();
+
+            ZeeneaClient client = new ZeeneaClient(config, zipPath);
+            boolean success = client.upload();
+
+            if (success && config.isKafkaConfigured()) {
+                publishZipToKafka(config, zipPath);
+            }
+
+            return success;
+        } catch (Exception e) {
+            System.err.println("Error processing " + productFile + ": " + e.getMessage());
+            log.log(Level.SEVERE, "Processing failed for " + productFile, e);
+            return false;
+        }
+    }
+
+    /**
+     * Single file mode: handles a ZIP or .odps.yaml file directly.
+     */
+    private static boolean processSingleFile(CliConfig config) {
         String zipPath = config.getFilePath();
         if (config.isProductYaml()) {
             try {
@@ -35,15 +114,13 @@ public class App {
             } catch (Exception e) {
                 System.err.println("Error building ZIP from product YAML: " + e.getMessage());
                 log.log(Level.SEVERE, "ZipBuilder failed", e);
-                System.exit(1);
+                return false;
             }
         }
 
         ZeeneaClient client = new ZeeneaClient(config, zipPath);
-
         boolean success = client.upload();
 
-        // Publish ZIP to Kafka if configured and Zeenea upload succeeded
         if (success && config.isKafkaConfigured()) {
             log.fine("Kafka is configured (broker: " + config.getKafkaBroker()
                     + "), starting ZIP publishing");
@@ -54,7 +131,7 @@ public class App {
             log.fine("Kafka not configured, skipping Kafka publishing");
         }
 
-        System.exit(success ? 0 : 1);
+        return success;
     }
 
     /**
