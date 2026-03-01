@@ -59,13 +59,13 @@ Or use the convenience wrapper (auto-builds if needed):
 
 #### Zeenea (required)
 
-| Flag | Env Variable | Required | Default | Description |
-|------|-------------|----------|---------|-------------|
-| `--file` | `ZEENEA_FILE` | Yes | - | Path to the ZIP file containing `.odps.yaml` descriptors |
-| `--tenant` | `ZEENEA_TENANT` | Yes* | - | Zeenea tenant name (builds URL `https://{tenant}.zeenea.app`) |
-| `--api-key` | `ZEENEA_API_KEY` | Yes | - | Platform API key (`X-API-SECRET`) |
-| `--catalog` | `ZEENEA_CATALOG` | No | `default` | Target catalog code |
-| `--url` | `ZEENEA_URL` | No | - | Custom base URL (overrides tenant-based URL) |
+| Flag        | Env Variable     | Required | Default   | Description                                                    |
+|-------------|------------------|----------|-----------|----------------------------------------------------------------|
+| `--file`    | `ZEENEA_FILE`    | Yes      | -         | Path to the ZIP file containing `.odps.yaml` descriptors       |
+| `--tenant`  | `ZEENEA_TENANT`  | Yes*     | -         | Zeenea tenant name (builds URL `https://{tenant}.zeenea.app`)  |
+| `--api-key` | `ZEENEA_API_KEY` | Yes      | -         | Platform API key (`X-API-SECRET`)                              |
+| `--catalog` | `ZEENEA_CATALOG` | No       | `default` | Target catalog code                                            |
+| `--url`     | `ZEENEA_URL`     | No       | -         | Custom base URL (overrides tenant-based URL)                   |
 
 *\*Not required if `--url` is provided.*
 
@@ -73,21 +73,21 @@ Or use the convenience wrapper (auto-builds if needed):
 
 When configured, the uploader publishes each YAML spec from the ZIP to the `controlcenter.spec.ingest` Kafka topic after a successful Zeenea upload. If no broker is provided, Kafka publishing is silently skipped.
 
-| Flag | Env Variable | Required | Default | Description |
-|------|-------------|----------|---------|-------------|
-| `--kafka-broker` | `KAFKA_BROKER_URL` | No | - | Kafka broker URL (e.g. `api.jgp.ai:9093`) |
-| `--kafka-user` | `KAFKA_USERNAME` | No | - | SASL username for Kafka authentication |
-| `--kafka-password` | `KAFKA_PASSWORD` | No | - | SASL password for Kafka authentication |
+| Flag               | Env Variable       | Required | Default | Description                                |
+|--------------------|--------------------|---------|---------|--------------------------------------------|
+| `--kafka-broker`   | `KAFKA_BROKER_URL` | No      | -       | Kafka broker URL (e.g. `api.jgp.ai:9093`)  |
+| `--kafka-user`     | `KAFKA_USERNAME`   | No      | -       | SASL username for Kafka authentication     |
+| `--kafka-password` | `KAFKA_PASSWORD`   | No      | -       | SASL password for Kafka authentication     |
 
 The Kafka producer uses **SASL_SSL** with **SCRAM-SHA-512** and expects a truststore at `~/.kafka/kafka.client.truststore.jks`. If no credentials are provided (broker only), it falls back to PLAINTEXT.
 
 #### General
 
-| Flag | Env Variable | Required | Default | Description |
-|------|-------------|----------|---------|-------------|
-| `--debug` | - | No | Off | Enable debug logging |
-| `--version`, `-v` | - | No | - | Show version |
-| `--help`, `-h` | - | No | - | Show usage help |
+| Flag              | Env Variable | Required | Default | Description          |
+|-------------------|--------------|----------|---------|----------------------|
+| `--debug`         | -            | No       | Off     | Enable debug logging |
+| `--version`, `-v` | -            | No       | -       | Show version         |
+| `--help`, `-h`    | -            | No       | -       | Show usage help      |
 
 CLI flags take precedence over environment variables.
 

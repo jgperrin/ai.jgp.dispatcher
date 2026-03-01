@@ -12,12 +12,12 @@ Documents that span multiple projects live in `doc/` in the Bitol Services repo 
 
 ## Related Projects
 
-| Project | Repo | Description |
-|---------|------|-------------|
-| **Bitol Services** | `ai.jgp.bitol.svc` | Spring Boot REST API — contracts, products, users, GitHub publishing, maturity assessment |
-| **Workbench Web App** | `ai.jgp.data-product-workbench` | React/Vite web UI for editing contracts and products |
-| **Workbench iPhone App** | `ai.jgp.data-product-workbench-app` | Native iOS companion app (read-only viewer) |
-| **Control Center UI** | `ai.jgp.data-product-control-center` | React front end for the Data Product Control Center |
-| **Control Center Services** | `ai.jgp.dataproduct.controlcenter.svc` | Spring Boot backend for the Control Center (Kafka, lifecycle) |
-| **Data Product Sidecar** | `ai.jgp.dataproduct.sidecar` | Lightweight Spring Boot agent co-deployed with data products |
-| **GitHub Action Uploader** (this repo) | `ai.jgp.gha.data-product-uploader` | Java CLI / GitHub Action for uploading specs to Zeenea + Kafka |
+| Project                                 | Repo                                    | Description                                                              |
+|-----------------------------------------|-----------------------------------------|--------------------------------------------------------------------------|
+| **Bitol Services**                      | `ai.jgp.bitol.svc`                     | Spring Boot REST API — contracts, products, users, GitHub publishing, maturity assessment |
+| **Workbench Web App**                   | `ai.jgp.data-product-workbench`        | React/Vite web UI for editing contracts and products                     |
+| **Workbench iPhone App**                | `ai.jgp.data-product-workbench-app`    | Native iOS companion app (read-only viewer)                              |
+| **Control Center UI**                   | `ai.jgp.data-product-control-center`   | React front end for the Data Product Control Center                      |
+| **Control Center Services**             | `ai.jgp.dataproduct.controlcenter.svc` | Spring Boot backend for the Control Center (Kafka, lifecycle)            |
+| **Data Product Sidecar**                | `ai.jgp.dataproduct.sidecar`           | Lightweight Spring Boot agent co-deployed with data products             |
+| **GitHub Action Uploader** (this repo)  | `ai.jgp.gha.data-product-uploader`     | Java CLI / GitHub Action for uploading specs to Zeenea + Kafka           |

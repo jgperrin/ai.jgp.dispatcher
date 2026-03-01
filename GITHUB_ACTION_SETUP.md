@@ -31,22 +31,22 @@ Credentials must **never** be committed to your repository. GitHub Secrets store
 
 ### Zeenea secrets (required)
 
-| Secret Name      | Description                                         | Required |
-|------------------|-----------------------------------------------------|----------|
-| `ZEENEA_API_KEY` | Your X-API-SECRET from the platform Administration  | Yes      |
-| `ZEENEA_TENANT`  | Your tenant name (e.g. `my-company`)                | Yes      |
-| `ZEENEA_URL`     | Custom base URL (only if not using production)      | No       |
-| `ZEENEA_CATALOG` | Catalog code (defaults to `default` if not set)     | No       |
+| Secret Name      | Description                                        | Required |
+|------------------|----------------------------------------------------|----------|
+| `ZEENEA_API_KEY` | Your X-API-SECRET from the platform Administration | Yes      |
+| `ZEENEA_TENANT`  | Your tenant name (e.g. `my-company`)               | Yes      |
+| `ZEENEA_URL`     | Custom base URL (only if not using production)     | No       |
+| `ZEENEA_CATALOG` | Catalog code (defaults to `default` if not set)    | No       |
 
 ### Kafka secrets (optional)
 
 If you want the uploader to publish specs to the Data Product Control Center via Kafka, add these secrets. If omitted, the Zeenea upload still works — Kafka publishing is silently skipped.
 
-| Secret Name        | Description                                            | Required |
-|--------------------|--------------------------------------------------------|----------|
+| Secret Name        | Description                                          | Required |
+|--------------------|------------------------------------------------------|----------|
 | `KAFKA_BROKER_URL` | Kafka broker URL (e.g. `api.jgp.ai:9093`)           | No       |
-| `KAFKA_USERNAME`   | SASL username for Kafka SCRAM-SHA-512 authentication   | No       |
-| `KAFKA_PASSWORD`   | SASL password for Kafka authentication                 | No       |
+| `KAFKA_USERNAME`   | SASL username for Kafka SCRAM-SHA-512 authentication | No       |
+| `KAFKA_PASSWORD`   | SASL password for Kafka authentication               | No       |
 
 ## Step 2: Create the Workflow File
 
@@ -105,12 +105,12 @@ If the upload fails, the workflow will show a red X and you can inspect the erro
 
 ## Troubleshooting
 
-| Problem | Likely Cause | Fix |
-|---------|-------------|-----|
-| Workflow does not trigger | Files are not in `podem/` or don't end with `.odps.yaml`/`.odcs.yaml` | Check file paths and extensions |
-| `Error: --api-key is required` | Secret `ZEENEA_API_KEY` is not set | Add it in Settings > Secrets |
-| `Error: --tenant is required` | Secret `ZEENEA_TENANT` is not set | Add it in Settings > Secrets |
-| `HTTP 500: Permission denied` | API key lacks required permissions | Regenerate key with Admin or Scanner scope |
-| `HTTP 500` on processing | Missing or invalid `catalogCode` | Set `ZEENEA_CATALOG` secret or check catalog name |
-| `Error publishing to Kafka` | Broker unreachable or bad credentials | Verify `KAFKA_BROKER_URL`, `KAFKA_USERNAME`, `KAFKA_PASSWORD` secrets |
-| Kafka publishing skipped | `KAFKA_BROKER_URL` secret not set | Add it in Settings > Secrets (Kafka is optional) |
+| Problem                        | Likely Cause                                                         | Fix                                                                    |
+|--------------------------------|----------------------------------------------------------------------|------------------------------------------------------------------------|
+| Workflow does not trigger      | Files are not in `podem/` or don't end with `.odps.yaml`/`.odcs.yaml` | Check file paths and extensions                                        |
+| `Error: --api-key is required` | Secret `ZEENEA_API_KEY` is not set                                   | Add it in Settings > Secrets                                           |
+| `Error: --tenant is required`  | Secret `ZEENEA_TENANT` is not set                                    | Add it in Settings > Secrets                                           |
+| `HTTP 500: Permission denied`  | API key lacks required permissions                                   | Regenerate key with Admin or Scanner scope                             |
+| `HTTP 500` on processing      | Missing or invalid `catalogCode`                                     | Set `ZEENEA_CATALOG` secret or check catalog name                      |
+| `Error publishing to Kafka`    | Broker unreachable or bad credentials                                | Verify `KAFKA_BROKER_URL`, `KAFKA_USERNAME`, `KAFKA_PASSWORD` secrets  |
+| Kafka publishing skipped       | `KAFKA_BROKER_URL` secret not set                                    | Add it in Settings > Secrets (Kafka is optional)                       |
