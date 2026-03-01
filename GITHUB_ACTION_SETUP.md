@@ -44,7 +44,7 @@ If you want the uploader to publish specs to the Data Product Control Center via
 
 | Secret Name        | Description                                            | Required |
 |--------------------|--------------------------------------------------------|----------|
-| `KAFKA_BROKER_URL` | Kafka broker URL (e.g. `cloud.jgp.ai:9093`)           | No       |
+| `KAFKA_BROKER_URL` | Kafka broker URL (e.g. `api.jgp.ai:9093`)           | No       |
 | `KAFKA_USERNAME`   | SASL username for Kafka SCRAM-SHA-512 authentication   | No       |
 | `KAFKA_PASSWORD`   | SASL password for Kafka authentication                 | No       |
 

@@ -44,7 +44,7 @@ java -jar target/data-product-uploader-0.2.0.jar \
   --file data-products.zip \
   --tenant my-company \
   --api-key YOUR_API_KEY \
-  --kafka-broker cloud.jgp.ai:9093 \
+  --kafka-broker api.jgp.ai:9093 \
   --kafka-user YOUR_KAFKA_USER \
   --kafka-password YOUR_KAFKA_PASSWORD
 ```
@@ -75,7 +75,7 @@ When configured, the uploader publishes each YAML spec from the ZIP to the `cont
 
 | Flag | Env Variable | Required | Default | Description |
 |------|-------------|----------|---------|-------------|
-| `--kafka-broker` | `KAFKA_BROKER_URL` | No | - | Kafka broker URL (e.g. `cloud.jgp.ai:9093`) |
+| `--kafka-broker` | `KAFKA_BROKER_URL` | No | - | Kafka broker URL (e.g. `api.jgp.ai:9093`) |
 | `--kafka-user` | `KAFKA_USERNAME` | No | - | SASL username for Kafka authentication |
 | `--kafka-password` | `KAFKA_PASSWORD` | No | - | SASL password for Kafka authentication |
 
