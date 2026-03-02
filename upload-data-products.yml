@@ -33,7 +33,7 @@ jobs:
       - name: Checkout uploader
         uses: actions/checkout@v4
         with:
-          repository: jgperrin/ai.jgp.gha.data-product-uploader
+          repository: jgperrin/ai.jgp.dispatcher
           path: uploader
 
       - name: Build uploader

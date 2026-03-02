@@ -20,4 +20,4 @@ Documents that span multiple projects live in `doc/` in the Bitol Services repo 
 | **Control Center UI**                   | `ai.jgp.data-product-control-center`   | React front end for the Data Product Control Center                      |
 | **Control Center Services**             | `ai.jgp.dataproduct.controlcenter.svc` | Spring Boot backend for the Control Center (Kafka, lifecycle)            |
 | **Data Product Sidecar**                | `ai.jgp.dataproduct.sidecar`           | Lightweight Spring Boot agent co-deployed with data products             |
-| **GitHub Action Uploader** (this repo)  | `ai.jgp.gha.data-product-uploader`     | Java CLI / GitHub Action for uploading specs to Zeenea + Kafka           |
+| **Dispatcher** (this repo)              | `ai.jgp.dispatcher`                    | Java CLI / GitHub Action for uploading specs to Zeenea + Kafka           |
