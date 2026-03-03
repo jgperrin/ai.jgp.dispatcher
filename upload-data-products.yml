@@ -1,7 +1,8 @@
 name: Upload Data Products
 
-# Trigger: when spec files in podem/ are changed on main or dev
+# Trigger: on push to spec files, or manually via workflow_dispatch
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
