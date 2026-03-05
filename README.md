@@ -30,7 +30,7 @@ mvn clean package
 ### Run
 
 ```bash
-java -jar target/data-product-uploader-0.2.0.jar \
+java -jar target/data-product-uploader-0.3.3.jar \
   --file data-products.zip \
   --tenant my-company \
   --api-key YOUR_API_KEY \
@@ -40,7 +40,7 @@ java -jar target/data-product-uploader-0.2.0.jar \
 With Kafka publishing enabled:
 
 ```bash
-java -jar target/data-product-uploader-0.2.0.jar \
+java -jar target/data-product-uploader-0.3.3.jar \
   --file data-products.zip \
   --tenant my-company \
   --api-key YOUR_API_KEY \
@@ -98,7 +98,7 @@ This tool can be set up as a GitHub Actions workflow to automatically upload dat
 ## Example Output
 
 ```
-Data Product Uploader v0.2.0
+Data Product Uploader v0.3.3
 [1/4] Requesting upload URL...
        Upload ID: abc123...
        Max file size: 50 MB

@@ -71,7 +71,9 @@ Once the workflow is in place, your day-to-day process is:
 3. **Merge** the pull request.
 4. The workflow runs automatically --- you can monitor it in the **Actions** tab of your repository.
 
-The workflow **only triggers** when `.odps.yaml` or `.odcs.yaml` files inside `podem/` are changed. Other changes to `main` (documentation, code, etc.) will not trigger an upload.
+The workflow triggers in two ways:
+- **Automatically** when `.odps.yaml` or `.odcs.yaml` files inside `podem/` are pushed to `main` or `dev`. Other changes (documentation, code, etc.) will not trigger an upload.
+- **Manually** via `workflow_dispatch` --- either from the GitHub Actions UI ("Run workflow" button) or from the Workbench's Publish wizard.
 
 ## Checking Workflow Results
 
@@ -108,6 +110,7 @@ If the upload fails, the workflow will show a red X and you can inspect the erro
 | Problem                        | Likely Cause                                                         | Fix                                                                    |
 |--------------------------------|----------------------------------------------------------------------|------------------------------------------------------------------------|
 | Workflow does not trigger      | Files are not in `podem/` or don't end with `.odps.yaml`/`.odcs.yaml` | Check file paths and extensions                                        |
+| `Workflow does not have 'workflow_dispatch' trigger` | Workflow file is missing the `workflow_dispatch:` trigger | Add `workflow_dispatch:` to the `on:` section of the workflow YAML    |
 | `Error: --api-key is required` | Secret `ZEENEA_API_KEY` is not set                                   | Add it in Settings > Secrets                                           |
 | `Error: --tenant is required`  | Secret `ZEENEA_TENANT` is not set                                    | Add it in Settings > Secrets                                           |
 | `HTTP 500: Permission denied`  | API key lacks required permissions                                   | Regenerate key with Admin or Scanner scope                             |

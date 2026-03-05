@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-03-05
+
+### Changed
+- Minor version bump.
+
+## [0.3.4] - 2026-03-03
+
+### Fixed
+- Added `workflow_dispatch:` trigger to `upload-data-products.yml` template so the workflow can be triggered manually from the GitHub UI or via the API (used by the Workbench Publish wizard)
+- Updated `GITHUB_ACTION_SETUP.md` to document manual dispatch and added troubleshooting entry for missing `workflow_dispatch` trigger
+
+## [0.3.3] - 2026-03-02
+
+### Fixed
+- Fixed workflow template: changed repo reference from `jgperrin/ai.jgp.gha.data-product-uploader` (old name) to `jgperrin/ai.jgp.dispatcher`
+- Synced pom.xml version with K.java version (was 0.2.5, now 0.3.3)
+- Updated CLAUDE.md project name from "GitHub Action Uploader" to "Dispatcher"
+- Updated JAR version references in README.md and bin/upload.sh
+
 ## [0.3.2] - 2026-02-23
 
 ### Fixed
