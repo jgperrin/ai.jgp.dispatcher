@@ -111,6 +111,17 @@ public class ZipBuilder {
                         }
                     }
 
+                    // Safety net: ensure contract version has v prefix to match product output port
+                    if (contractBytes != null) {
+                        String yaml = new String(contractBytes, StandardCharsets.UTF_8);
+                        // Match top-level version field (not indented) without v prefix
+                        String fixed = yaml.replaceFirst("(?m)^(version:\\s*\")(\\d)", "$1v$2");
+                        if (!fixed.equals(yaml)) {
+                            System.out.println("  Note: added missing 'v' prefix to contract version");
+                            contractBytes = fixed.getBytes(StandardCharsets.UTF_8);
+                        }
+                    }
+
                     String contractEntry = contractId + "-v" + portVersion + ".odcs.yaml";
                     addEntry(zos, contractEntry, contractBytes);
                     System.out.println("  + " + contractEntry + " (from output port '" + portName
