@@ -43,6 +43,14 @@ public class KafkaPublisher {
     private final KafkaProducer<String, byte[]> producer;
     private final boolean connected;
 
+    /**
+     * Package-private constructor for testing with a pre-built producer.
+     */
+    KafkaPublisher(KafkaProducer<String, byte[]> producer, boolean connected) {
+        this.producer = producer;
+        this.connected = connected;
+    }
+
     public KafkaPublisher(String broker, String user, String password) {
         String authMode = (user != null && password != null)
                 ? "SASL_SSL (SCRAM-SHA-512)"
@@ -168,6 +176,7 @@ public class KafkaPublisher {
      *
      * @return absolute path to the temp truststore, or null on failure
      */
+    @Generated
     private static String buildTruststoreFromBroker(String broker) throws Exception {
         // Parse host:port from broker string
         String host;

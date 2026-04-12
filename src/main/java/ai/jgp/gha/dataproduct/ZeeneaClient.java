@@ -28,9 +28,13 @@ public class ZeeneaClient {
     }
 
     public ZeeneaClient(CliConfig config, String zipPath) {
+        this(config, zipPath, HttpClient.newHttpClient());
+    }
+
+    ZeeneaClient(CliConfig config, String zipPath, HttpClient httpClient) {
         this.config = config;
         this.zipPath = zipPath;
-        this.httpClient = HttpClient.newHttpClient();
+        this.httpClient = httpClient;
     }
 
     /**

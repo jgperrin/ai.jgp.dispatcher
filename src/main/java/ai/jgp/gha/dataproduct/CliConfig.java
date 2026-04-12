@@ -86,9 +86,7 @@ public class CliConfig {
                     System.exit(0);
                     break;
                 default:
-                    System.err.println("Unknown option: " + args[i]);
-                    printUsage();
-                    System.exit(1);
+                    throw new IllegalArgumentException("Unknown option: " + args[i]);
             }
         }
 
@@ -105,38 +103,31 @@ public class CliConfig {
         if (kafkaPassword == null) kafkaPassword = envOrNull(K.ENV_KAFKA_PASSWORD);
 
         // Validate required fields
-        boolean valid = true;
+        StringBuilder errors = new StringBuilder();
         boolean hasFile = file != null && !file.isBlank();
         boolean hasDir = dir != null && !dir.isBlank();
         if (!hasFile && !hasDir) {
-            System.err.println("Error: --file or --dir is required (or set ZEENEA_FILE / ZEENEA_DIR)");
-            valid = false;
+            errors.append("--file or --dir is required (or set ZEENEA_FILE / ZEENEA_DIR)\n");
         }
         if (hasFile && hasDir) {
-            System.err.println("Error: --file and --dir are mutually exclusive");
-            valid = false;
+            errors.append("--file and --dir are mutually exclusive\n");
         }
         if (tenant == null || tenant.isBlank()) {
-            System.err.println("Error: --tenant is required (or set ZEENEA_TENANT)");
-            valid = false;
+            errors.append("--tenant is required (or set ZEENEA_TENANT)\n");
         }
         if (apiKey == null || apiKey.isBlank()) {
-            System.err.println("Error: --api-key is required (or set ZEENEA_API_KEY)");
-            valid = false;
+            errors.append("--api-key is required (or set ZEENEA_API_KEY)\n");
         }
-        if (!valid) {
-            printUsage();
-            System.exit(1);
+        if (!errors.isEmpty()) {
+            throw new IllegalArgumentException(errors.toString().trim());
         }
 
         // Validate file/dir exists
         if (hasFile && !Files.exists(Path.of(file))) {
-            System.err.println("Error: file not found: " + file);
-            System.exit(1);
+            throw new IllegalArgumentException("File not found: " + file);
         }
         if (hasDir && !Files.isDirectory(Path.of(dir))) {
-            System.err.println("Error: directory not found: " + dir);
-            System.exit(1);
+            throw new IllegalArgumentException("Directory not found: " + dir);
         }
 
         // Resolve base URL: explicit URL > built from tenant
@@ -157,13 +148,12 @@ public class CliConfig {
 
     private static String nextArg(String[] args, int index, String flag) {
         if (index + 1 >= args.length) {
-            System.err.println("Error: " + flag + " requires a value");
-            printUsage();
-            System.exit(1);
+            throw new IllegalArgumentException(flag + " requires a value");
         }
         return args[index + 1];
     }
 
+    @Generated
     private static void printUsage() {
         System.out.println();
         System.out.println("Data Product Uploader v" + K.VERSION);

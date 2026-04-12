@@ -12,11 +12,19 @@ public class App {
 
     private static final Logger log = Logger.getLogger(App.class.getName());
 
+    @Generated
     public static void main(String[] args) {
         System.out.println("Data Product Uploader v" + K.VERSION);
         System.out.println();
 
-        CliConfig config = CliConfig.parse(args);
+        CliConfig config;
+        try {
+            config = CliConfig.parse(args);
+        } catch (IllegalArgumentException e) {
+            System.err.println("Error: " + e.getMessage());
+            System.exit(1);
+            return;
+        }
 
         if (config.isDebug()) {
             Logger root = Logger.getLogger("ai.jgp.gha.dataproduct");
@@ -39,7 +47,7 @@ public class App {
      *
      * @return exit code (0 = all succeeded, 1 = at least one failure)
      */
-    private static int processDirectory(CliConfig config) {
+    static int processDirectory(CliConfig config) {
         List<String> changed = ZipBuilder.findChangedProducts(config.getDirPath());
 
         if (changed.isEmpty()) {
@@ -80,7 +88,7 @@ public class App {
      * Processes a single product YAML: builds ZIP, uploads to Zeenea,
      * publishes to Kafka.
      */
-    private static boolean processProduct(CliConfig config, String productFile) {
+    static boolean processProduct(CliConfig config, String productFile) {
         try {
             Path builtZip = ZipBuilder.buildFromProduct(productFile);
             String zipPath = builtZip.toAbsolutePath().toString();
@@ -104,7 +112,7 @@ public class App {
     /**
      * Single file mode: handles a ZIP or .odps.yaml file directly.
      */
-    private static boolean processSingleFile(CliConfig config) {
+    static boolean processSingleFile(CliConfig config) {
         String zipPath = config.getFilePath();
         if (config.isProductYaml()) {
             try {
@@ -138,7 +146,7 @@ public class App {
      * Reads the ZIP file and publishes it as a single binary message to the
      * Kafka spec ingest topic.
      */
-    private static void publishZipToKafka(CliConfig config, String zipPath) {
+    static void publishZipToKafka(CliConfig config, String zipPath) {
         System.out.println();
         System.out.println("Publishing ZIP to Kafka...");
 
