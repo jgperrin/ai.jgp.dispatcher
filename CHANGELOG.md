@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.3] - 2026-05-19
+
+### Changed
+- Raised the JaCoCo `jacoco.line.coverage` threshold from the `0.00` placeholder to `0.60`, so the build now fails if dispatcher line coverage drops below 60%. The umbrella user story (US-0057, #214) targets 80%, but the dispatcher's `App` entrypoint is currently uncoverable without a refactor (every path calls `System.exit`); 60% is the realistic floor the existing test suite leaves us. Tightening to 80% is tracked in a follow-up "Claude:" note on #214.
+
 ## [0.4.2] - 2026-05-19
 
 ### Added
