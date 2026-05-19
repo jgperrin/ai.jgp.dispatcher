@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-05-19
+
+### Added
+- Wired the `jacoco-maven-plugin` into `pom.xml` so test runs produce a coverage report at `target/site/jacoco/`. The `check` rule is configured with a placeholder `jacoco.line.coverage` threshold of `0.00` so existing builds keep passing; the threshold is tightened once real test classes land (closes #286).
+- Added JUnit Jupiter 5.10.2 and Mockito 5.12.0 as test-scope dependencies, and a `KTest` smoke test covering the `K` constants holder so `mvn test` has something to instrument and the JaCoCo wiring is exercised end-to-end.
+
+### Changed
+- Bumped Maven Surefire to 3.2.5 with `@{argLine}` propagation so the JaCoCo agent is picked up automatically by the test JVM.
+
 ## [0.4.0] - 2026-03-05
 
 ### Changed
