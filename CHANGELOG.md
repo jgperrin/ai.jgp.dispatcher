@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] - 2026-05-19
+
+### Added
+- Initial unit-test suite for the dispatcher under `src/test/java/ai/jgp/gha/dataproduct/`, covering `UploadResponse`, `CliConfig`, `ZipBuilder`, `ZeeneaClient`, and `KafkaPublisher`. Tests use JUnit Jupiter + Mockito; the HTTP boundary of `ZeeneaClient` is exercised through a mocked `HttpClient` and the Kafka publisher is verified against an unreachable broker so the unconnected branch is covered. This is the first batch of coverage tests for `ai.jgp.dispatcher` (closes #212, US-0055).
+
+### Changed
+- Added a package-private constructor seam to `ZeeneaClient` accepting an `HttpClient`, so tests can inject a mock without the production callers changing. This is the only source change required to make the upload flow testable.
+
 ## [0.4.1] - 2026-05-19
 
 ### Added

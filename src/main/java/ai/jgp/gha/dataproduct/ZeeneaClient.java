@@ -28,9 +28,17 @@ public class ZeeneaClient {
     }
 
     public ZeeneaClient(CliConfig config, String zipPath) {
+        this(config, zipPath, HttpClient.newHttpClient());
+    }
+
+    /**
+     * Package-private constructor seam used by tests to inject a mocked
+     * {@link HttpClient}. Not part of the public API.
+     */
+    ZeeneaClient(CliConfig config, String zipPath, HttpClient httpClient) {
         this.config = config;
         this.zipPath = zipPath;
-        this.httpClient = HttpClient.newHttpClient();
+        this.httpClient = httpClient;
     }
 
     /**
