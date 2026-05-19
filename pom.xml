@@ -6,7 +6,7 @@
 
     <groupId>ai.jgp.gha</groupId>
     <artifactId>data-product-uploader</artifactId>
-    <version>0.4.3</version>
+    <version>0.4.4</version>
     <packaging>jar</packaging>
 
     <name>Data Product Uploader</name>
@@ -23,7 +23,7 @@
         <junit.version>5.10.2</junit.version>
         <mockito.version>5.12.0</mockito.version>
         <jacoco.version>0.8.12</jacoco.version>
-        <jacoco.line.coverage>0.60</jacoco.line.coverage>
+        <jacoco.line.coverage>0.80</jacoco.line.coverage>
     </properties>
 
     <dependencies>
@@ -65,6 +65,12 @@
             <version>${mockito.version}</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>uk.org.webcompere</groupId>
+            <artifactId>system-stubs-jupiter</artifactId>
+            <version>2.1.7</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -74,7 +80,7 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.2.5</version>
                 <configuration>
-                    <argLine>@{argLine} -XX:+EnableDynamicAgentLoading</argLine>
+                    <argLine>@{argLine} -XX:+EnableDynamicAgentLoading -Djava.security.manager=allow</argLine>
                 </configuration>
             </plugin>
             <plugin>
