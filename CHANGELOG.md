@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.5] - 2026-05-22
+
+### Added
+- **End-to-End Process** section in `README.md` documenting the full pipeline from a Workbench publish through GitHub Actions, change detection, ZIP building, the Zeenea upload, and the optional Kafka publish — including a Mermaid `sequenceDiagram` of the flow.
+
+### Fixed
+- Corrected the stale `How It Works` step 5: the dispatcher publishes the **entire spec ZIP as a single binary message** to `controlcenter.spec.ingest` (per `KafkaPublisher.publishZip`), not per-YAML `deliver-spec` envelopes.
+
 ## [0.4.4] - 2026-05-19
 
 ### Added
