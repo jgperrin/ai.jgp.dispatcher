@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.4] - 2026-05-19
+
+### Added
+- `AppTest` covering `App#main` across single-file ZIP, single-file `.odps.yaml`, directory mode (no changes, all success, partial failure, ZIP build error), debug logging, and the Kafka publish branches (configured + connected, configured + unreachable, publish exception). Uses Mockito `mockConstruction` to swap in mock `ZeeneaClient` and `KafkaPublisher` instances and `MockedStatic` to stub `ZipBuilder.findChangedProducts` / `buildFromProduct`.
+- Negative-path tests for `CliConfig.parse` (unknown flag, missing value, missing file/dir, mutually exclusive `--file`/`--dir`, missing tenant/api-key, nonexistent file/dir, `--help`, `-h`, `--version`, `-v`, blank env var, env-var fallbacks for all options including `--dir`). Verifies the exit codes via `system-stubs-jupiter`'s `catchSystemExit`.
+
+### Changed
+- Added `uk.org.webcompere:system-stubs-jupiter:2.1.7` as a test-scope dependency so tests can capture `System.exit` calls without a refactor. Surefire `argLine` now passes `-Djava.security.manager=allow` because JDK 21 forbids `setSecurityManager` otherwise and system-stubs installs a `NoExitSecurityManager` to intercept exits.
+- Raised the JaCoCo `jacoco.line.coverage` threshold from `0.60` to `0.80`. Actual line coverage is now **87.05%** (511/587 covered), satisfying the audit rule from #283 and AC-4 of #286.
+
 ## [0.4.3] - 2026-05-19
 
 ### Changed
