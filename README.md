@@ -10,9 +10,94 @@ The uploader takes a ZIP file containing `.odps.yaml` and `.odcs.yaml` descripto
 2. **Upload** the ZIP file to the provided S3 URL
 3. **Trigger** processing for the target catalog
 4. **Poll** until processing completes and report the results
-5. **Publish specs to Kafka** (optional) — each YAML file from the ZIP is wrapped in an OOCS `deliver-spec` envelope and published to the `controlcenter.spec.ingest` topic
+5. **Publish to Kafka** (optional) — the entire spec ZIP is published as a single binary message to the `controlcenter.spec.ingest` topic
 
 Steps 1–4 upload to Zeenea. Step 5 runs only when Kafka is configured and the Zeenea upload succeeds.
+
+## End-to-End Process
+
+The dispatcher is the final stage in a pipeline that moves data product specs from the Bitol Workbench to downstream systems (the Zeenea catalog and the Control Center). The full pipeline:
+
+### Stage 1: User publishes from the Workbench
+
+The user clicks "Publish to GitHub" in the Workbench web app (or calls the API directly). The Bitol service (`ai.jgp.bitol.svc`) handles the publish:
+
+1. **V3 enhanced publish** (`POST /v3/products/publish-github`):
+   - Runs pre-publish checks on the product and all referenced contracts (version-conflict detection via git tags).
+   - Publishes each referenced contract to the GitHub repo via `PUT /repos/{owner}/{repo}/contents/{path}` (one commit per contract).
+   - Publishes the product itself (one more commit).
+   - Creates/updates git tags for each published artifact (`product-{id}-v{version}`, `contract-{id}-v{version}`).
+   - Files are placed at the path specified by the product's `canonicalUrl` (e.g. `podem/04acb87d-….odps.yaml`).
+2. **V1 publish** (`POST /v1/products/publish-github`): publishes a single product file with no pre-publish checks and no auto-publish of contracts.
+
+### Stage 2: GitHub Actions triggers the dispatcher
+
+The user repo's workflow (`.github/workflows/upload-data-products.yml`) triggers on a **push** that touches `podem/**/*.odps.yaml` / `podem/**/*.odcs.yaml`, or on **manual dispatch**. It checks out the repo with full history and tags, builds this dispatcher, and runs `java -jar data-product-uploader-*.jar --dir podem`.
+
+### Stage 3: Dispatcher detects changed products (directory mode)
+
+With `--dir`, the dispatcher runs `git diff --name-only HEAD~1 HEAD -- podem` to find what changed. Files ending in `.odps.yaml` are selected as **products to process**; `.odcs.yaml` files are logged but not processed directly (contracts are bundled with their parent product). If no product files changed, it exits with `No product files changed, nothing to upload.`
+
+### Stage 4: ZIP building (per product)
+
+For each changed product, `ZipBuilder.buildFromProduct()` creates a versioned ZIP:
+
+1. Parse the product YAML to extract `id`, `version`, and `outputPorts[]`.
+2. Add the product as `{productId}-v{version}.odps.yaml`.
+3. Resolve each referenced contract — extract `contractId` and `version` from the port, fetch the content at the tagged version (`git show contract-{contractId}-v{version}:podem/{contractId}.odcs.yaml`), falling back to the working copy if the tag is absent, and add it as `{contractId}-v{version}.odcs.yaml`.
+
+### Stage 5: Upload to Zeenea
+
+`ZeeneaClient` requests an upload URL (`POST /api/synchronization/data-product-uploads`), `PUT`s the ZIP to the returned S3 presigned URL, triggers processing for the target catalog, and polls `GET …/{uploadId}` every 2 seconds (up to 60 retries) until the status is `Processed` or `Failed`.
+
+### Stage 6: Publish ZIP to Kafka (optional)
+
+If Kafka credentials are configured, `KafkaPublisher.publishZip()` sends the **entire ZIP as a single binary message** to the `controlcenter.spec.ingest` topic, keyed by the ZIP filename. The Control Center extracts the specs and advances the data products to `SPEC_READY`. If the broker is unreachable, this step is skipped with a warning — the Zeenea upload still counts as success.
+
+### Process diagram
+
+```mermaid
+sequenceDiagram
+    participant W as Workbench UI
+    participant B as Bitol SVC
+    participant G as GitHub
+    participant D as Dispatcher
+    participant Z as Zeenea
+    participant K as Kafka
+
+    Note over W,B: Stage 1: User publishes
+    W->>B: POST /v3/products/publish-github
+    B->>G: PUT contract.odcs.yaml (commit 1)
+    B->>G: PUT product.odps.yaml (commit 2)
+    B->>G: POST tags (contract + product)
+
+    Note over G,D: Stage 2: GitHub Actions triggers
+    G->>D: push event triggers workflow
+    D->>G: checkout repo (full history + tags)
+
+    Note over D: Stage 3: Detect changes
+    D->>D: git diff HEAD~1 HEAD -- podem
+    D->>D: filter .odps.yaml files only
+
+    Note over D: Stage 4: Build ZIP
+    D->>D: parse product YAML (id, version, outputPorts)
+    D->>D: git show tag:contract.odcs.yaml
+    D->>D: package product + contracts into ZIP
+
+    Note over D,Z: Stage 5: Upload to Zeenea
+    D->>Z: POST /data-product-uploads (request URL)
+    Z-->>D: S3 presigned URL + upload ID
+    D->>Z: PUT ZIP to S3
+    D->>Z: POST trigger processing
+    loop Poll every 2s (max 60 retries)
+        D->>Z: GET upload status
+        Z-->>D: Processing / Processed / Failed
+    end
+
+    Note over D,K: Stage 6: Publish to Kafka (optional)
+    D->>K: probe broker (5s timeout)
+    D->>K: publish ZIP to controlcenter.spec.ingest
+```
 
 ## Requirements
 
