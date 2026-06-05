@@ -1,6 +1,7 @@
 package ai.jgp.gha.dataproduct;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
 
 import java.io.BufferedReader;
@@ -110,6 +111,13 @@ public class ZipBuilder {
                             continue;
                         }
                     }
+
+                    // Safety net (#33): make the contract's internal version
+                    // match how this output port references it, when they differ
+                    // only by the leading "v" — otherwise Zeenea rejects the
+                    // upload with "no matching data contract".
+                    contractBytes = normalizeContractVersion(
+                            contractBytes, portVersionNode.asText(), contractId);
 
                     String contractEntry = contractId + "-v" + portVersion + ".odcs.yaml";
                     addEntry(zos, contractEntry, contractBytes);
@@ -255,6 +263,61 @@ public class ZipBuilder {
             System.err.println("git diff failed: " + e.getMessage());
         }
         return changed;
+    }
+
+    /**
+     * Normalises the contract YAML's top-level {@code version} field so it
+     * matches exactly how the product's output port references it, when the two
+     * differ <strong>only</strong> by a leading {@code v} prefix (e.g. contract
+     * {@code 0.2.1} vs port {@code v0.2.1}). Zeenea matches a product output
+     * port to its data contract by this version string, so a prefix-only
+     * mismatch causes a "no matching data contract" rejection.
+     *
+     * <p>This is a conservative safety net (#33): the numeric portion is never
+     * changed, and already-consistent or genuinely-different (e.g. {@code 0.2.1}
+     * vs {@code 0.2.2}) inputs are returned untouched. The root cause is fixed
+     * upstream in {@code ai.jgp.bitol.svc} (#595).
+     *
+     * @param contractBytes  the contract YAML as stored (may be null)
+     * @param portVersionRef the output port's version reference, raw and
+     *                       un-stripped (e.g. {@code "v0.2.1"})
+     * @param contractId     the contract id, for the log message
+     * @return the contract bytes with the {@code version} field rewritten iff a
+     *         prefix-only mismatch was found; otherwise the original bytes
+     */
+    static byte[] normalizeContractVersion(byte[] contractBytes, String portVersionRef,
+            String contractId) {
+        if (contractBytes == null || portVersionRef == null || portVersionRef.isEmpty()) {
+            return contractBytes;
+        }
+        try {
+            YAMLMapper mapper = new YAMLMapper();
+            JsonNode root = mapper.readTree(contractBytes);
+            if (root == null || !root.has("version")) {
+                return contractBytes;
+            }
+            String contractVersion = root.path("version").asText();
+            // Already consistent — nothing to do.
+            if (portVersionRef.equals(contractVersion)) {
+                return contractBytes;
+            }
+            // Only act when the difference is purely the leading "v": the
+            // numeric portions must be identical, otherwise leave it alone.
+            if (!normalizeVersion(portVersionRef).equals(normalizeVersion(contractVersion))) {
+                return contractBytes;
+            }
+            ((ObjectNode) root).put("version", portVersionRef);
+            log.warning("Normalised contract '" + contractId + "' version '" + contractVersion
+                    + "' -> '" + portVersionRef + "' to match the product output-port reference "
+                    + "(prefix-only mismatch; upstream fix tracked in ai.jgp.bitol.svc#595)");
+            return mapper.writeValueAsBytes(root);
+        } catch (Exception e) {
+            // A defensive normalisation must never break packaging — on any
+            // parse/serialise failure, fall back to the original bytes.
+            log.warning("Contract version normalisation skipped for '" + contractId
+                    + "': " + e.getMessage());
+            return contractBytes;
+        }
     }
 
     /**
