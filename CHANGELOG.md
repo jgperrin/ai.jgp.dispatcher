@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.6] - 2026-06-05
+
+### Fixed
+- **`ZipBuilder` now normalises a contract's internal `version` to match the product output-port reference when they differ only by the leading `v` prefix** (#33). Previously a product referencing a contract as `v0.2.1` while the contract's own `version` was `0.2.1` (or vice-versa) produced a ZIP that Zeenea rejected with "no matching data contract". The pass is conservative — it only adjusts the `v` prefix, never the numeric portion; already-consistent or genuinely-different versions are left byte-for-byte untouched. A `WARNING` is logged whenever the normalisation fires so the upstream root-cause fix (`ai.jgp.bitol.svc#595`) can be tracked. Added `ZipBuilderTest` coverage for the prefix-only fix, the no-op consistent case, the numeric-mismatch left-alone case, the missing-version guard, the warning, and an end-to-end `buildFromProduct` check.
+
 ## [0.4.5] - 2026-05-22
 
 ### Added

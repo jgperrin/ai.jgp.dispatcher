@@ -1,16 +1,26 @@
 package ai.jgp.gha.dataproduct;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
+
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -141,6 +151,109 @@ class ZipBuilderTest {
         assertNotNull(changed);
         // Either empty (likely) or whatever the surrounding repo says — we
         // only assert it doesn't throw and returns a non-null list.
+    }
+
+    // ── #33: contract version normalisation (safety net for the Zeenea
+    //         "no matching data contract" prefix-only mismatch) ──────────────
+
+    /** AC-1: contract "0.2.1" + port "v0.2.1" → contract normalised up to "v0.2.1". */
+    @Test
+    void normalizeContractVersion_addsPrefixToMatchPortReference() throws IOException {
+        byte[] contract = "id: c1\nversion: 0.2.1\n".getBytes(StandardCharsets.UTF_8);
+
+        byte[] result = ZipBuilder.normalizeContractVersion(contract, "v0.2.1", "c1");
+
+        assertEquals("v0.2.1", versionOf(result),
+                "contract version should be rewritten to match the product's reference");
+    }
+
+    /** AC-2: already-consistent inputs are returned byte-for-byte unchanged. */
+    @Test
+    void normalizeContractVersion_leavesConsistentInputUntouched() {
+        byte[] contract = "id: c1\nversion: v0.2.1\n".getBytes(StandardCharsets.UTF_8);
+
+        byte[] result = ZipBuilder.normalizeContractVersion(contract, "v0.2.1", "c1");
+
+        assertArrayEquals(contract, result, "consistent input must not be re-serialised");
+    }
+
+    /** AC-3: a non-prefix (numeric) mismatch is left alone. */
+    @Test
+    void normalizeContractVersion_leavesNumericMismatchAlone() {
+        byte[] contract = "id: c1\nversion: 0.2.1\n".getBytes(StandardCharsets.UTF_8);
+
+        byte[] result = ZipBuilder.normalizeContractVersion(contract, "0.2.2", "c1");
+
+        assertArrayEquals(contract, result, "a numeric difference must never be touched");
+    }
+
+    /** Defensive: a contract without a version field is returned unchanged. */
+    @Test
+    void normalizeContractVersion_handlesMissingVersionField() {
+        byte[] contract = "id: c1\nname: no-version\n".getBytes(StandardCharsets.UTF_8);
+
+        byte[] result = ZipBuilder.normalizeContractVersion(contract, "v0.2.1", "c1");
+
+        assertArrayEquals(contract, result);
+    }
+
+    /** AC-4: a warning is logged when (and only when) the normalisation fires. */
+    @Test
+    void normalizeContractVersion_logsWarningOnlyWhenItFires() {
+        Logger zbLog = Logger.getLogger(ZipBuilder.class.getName());
+        List<LogRecord> records = new ArrayList<>();
+        Handler handler = new Handler() {
+            @Override public void publish(LogRecord r) { records.add(r); }
+            @Override public void flush() { }
+            @Override public void close() { }
+        };
+        zbLog.addHandler(handler);
+        try {
+            // fires
+            ZipBuilder.normalizeContractVersion(
+                    "id: c1\nversion: 0.2.1\n".getBytes(StandardCharsets.UTF_8), "v0.2.1", "c1");
+            // does not fire (already consistent)
+            ZipBuilder.normalizeContractVersion(
+                    "id: c1\nversion: v0.2.1\n".getBytes(StandardCharsets.UTF_8), "v0.2.1", "c1");
+        } finally {
+            zbLog.removeHandler(handler);
+        }
+
+        long warnings = records.stream()
+                .filter(r -> r.getLevel() == Level.WARNING)
+                .filter(r -> r.getMessage().contains("Normalised contract"))
+                .count();
+        assertEquals(1, warnings, "exactly one normalisation warning expected");
+    }
+
+    /** AC-1 end-to-end: the prefix-only fix is applied inside buildFromProduct. */
+    @Test
+    void buildFromProduct_normalisesContractVersionToPortReference() throws IOException {
+        Path productFile = tmp.resolve("product.odps.yaml");
+        Path contractFile = tmp.resolve("c1.odcs.yaml");
+        // Contract internal version lacks the "v"; the product references it WITH "v".
+        Files.writeString(contractFile, "id: c1\nversion: 0.2.1\n");
+        Files.writeString(productFile, String.join("\n",
+                "id: prod-1",
+                "version: v2.0.0",
+                "outputPorts:",
+                "  - name: p1",
+                "    contractId: c1",
+                "    version: v0.2.1",
+                ""));
+
+        Path zip = ZipBuilder.buildFromProduct(productFile.toString());
+        Map<String, byte[]> entries = readZip(zip);
+
+        byte[] contractEntry = entries.get("c1-v0.2.1.odcs.yaml");
+        assertNotNull(contractEntry, "expected contract entry, got " + entries.keySet());
+        assertEquals("v0.2.1", versionOf(contractEntry),
+                "packaged contract should carry the product's exact version reference");
+    }
+
+    /** Reads the top-level {@code version} field out of a YAML byte payload. */
+    private static String versionOf(byte[] yaml) throws IOException {
+        return new YAMLMapper().readTree(yaml).path("version").asText();
     }
 
     private static Map<String, byte[]> readZip(Path zip) throws IOException {
