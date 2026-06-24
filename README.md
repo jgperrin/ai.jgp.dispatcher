@@ -176,6 +176,29 @@ The Kafka producer uses **SASL_SSL** with **SCRAM-SHA-512** and expects a trusts
 
 CLI flags take precedence over environment variables.
 
+## Testing
+
+The test suite lives under `src/test/java/ai/jgp/gha/dataproduct/**` (JUnit 5 +
+Mockito): ZIP building, the Zeenea HTTP client, the Kafka publisher, CLI config,
+and the end-to-end `App` flows. JaCoCo enforces an **80%** line-coverage gate on
+the `verify` phase.
+
+```bash
+mvn verify            # full suite + the JaCoCo coverage gate
+bin/test-gate.sh      # the same, then reports the run to the WB2 Test Log
+```
+
+**Reporting.** Every run reports a summary to the **WB2 Test Log** (Admin → Logs
+→ Test Log, backed by `POST /v4/diagnostics` with `type=test-run`) as an
+**OORS `ObservabilityResults`** document (RFC-0018): count metrics where the
+`failed` metric carries the pass/fail verdict. Green is derived server-side from
+`results[]` and self-resolves at ingest, so only failures surface in the triage
+queue. `bin/test-gate.sh` posts the run (`app=dispatcher`, `suite=gate`) via
+`bin/post-test-run.sh` — the reporter shared byte-for-byte with svc and the MCP
+server. `POST_TEST_RUN=0` opts out. The dispatcher has no CI workflow of its own
+(it runs as a step inside other repos' workflows), so reporting is driven by the
+local gate; the convention is documented in `doc/oors-test-rollout.md` (svc).
+
 ## GitHub Actions Integration
 
 This tool can be set up as a GitHub Actions workflow to automatically upload data products whenever `.odps.yaml` files are merged into `main`. See [GITHUB_ACTION_SETUP.md](GITHUB_ACTION_SETUP.md) for a step-by-step guide.
