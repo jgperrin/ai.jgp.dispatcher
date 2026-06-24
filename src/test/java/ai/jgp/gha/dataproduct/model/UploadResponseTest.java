@@ -40,6 +40,28 @@ class UploadResponseTest {
     }
 
     @Test
+    void fromJson_capturesEveryHeader() {
+        String json = """
+                {
+                  "id": "u",
+                  "maximumFileSizeInBytes": 1,
+                  "uploadParameters": {
+                    "url": "u",
+                    "headers": {
+                      "x-amz-server-side-encryption": "aws:kms",
+                      "x-amz-server-side-encryption-aws-kms-key-id": "arn:key/abc",
+                      "x-amz-tagging": ""
+                    }
+                  }
+                }
+                """;
+        UploadResponse r = UploadResponse.fromJson(json);
+        assertEquals(3, r.getHeaders().size());
+        assertEquals("aws:kms", r.getHeaders().get("x-amz-server-side-encryption"));
+        assertEquals("", r.getHeaders().get("x-amz-tagging"));
+    }
+
+    @Test
     void fromJson_throwsOnMissingId() {
         String bad = "{\"maximumFileSizeInBytes\":1,\"uploadParameters\":{\"url\":\"u\",\"headers\":{}}}";
         assertThrows(Exception.class, () -> UploadResponse.fromJson(bad));

@@ -197,4 +197,64 @@ class ZeeneaClientTest {
         org.junit.jupiter.api.Assertions.assertThrows(IOException.class,
                 () -> client.uploadFile(resp));
     }
+
+    // --- #38: replay every signed header (incl. an empty x-amz-tagging) on the PUT ---
+
+    /** Upload-URL response whose presigned URL signs x-amz-tagging but whose
+     * headers map omits it (the real Actian landing-zone behaviour from #38). */
+    private static final String SIGNED_URL_RESPONSE_BODY = """
+            {
+              "id": "u-1",
+              "maximumFileSizeInBytes": 26214400,
+              "uploadParameters": {
+                "url": "https://s3.example.com/u-1?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-SignedHeaders=host%3Bx-amz-server-side-encryption%3Bx-amz-server-side-encryption-aws-kms-key-id%3Bx-amz-tagging",
+                "headers": {
+                  "x-amz-server-side-encryption": "aws:kms",
+                  "x-amz-server-side-encryption-aws-kms-key-id": "arn:key/abc"
+                }
+              }
+            }
+            """;
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void upload_putReplaysEverySignedHeaderIncludingEmptyTagging() throws Exception {
+        HttpResponse<String> r1 = stubResponse(200, SIGNED_URL_RESPONSE_BODY);
+        HttpResponse<String> r2 = stubResponse(200, "");
+        HttpResponse<String> r3 = stubResponse(204, "");
+        HttpResponse<String> r4 = stubResponse(200, STATUS_PROCESSED_BODY);
+        when(http.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+                .thenReturn(r1, r2, r3, r4);
+
+        ZeeneaClient client = new ZeeneaClient(config, zip.toString(), http);
+        assertTrue(client.upload());
+
+        org.mockito.ArgumentCaptor<HttpRequest> captor =
+                org.mockito.ArgumentCaptor.forClass(HttpRequest.class);
+        verify(http, times(4)).send(captor.capture(), any(HttpResponse.BodyHandler.class));
+
+        // The PUT is the 2nd request (1: POST url, 2: PUT, 3: POST process, 4: GET poll).
+        HttpRequest put = captor.getAllValues().get(1);
+        assertEquals("PUT", put.method());
+        var headers = put.headers();
+        assertEquals("aws:kms", headers.firstValue("x-amz-server-side-encryption").orElse(null));
+        assertEquals("arn:key/abc", headers.firstValue("x-amz-server-side-encryption-aws-kms-key-id").orElse(null));
+        // The crux of #38: x-amz-tagging is signed but absent from the server's
+        // headers map, so it must still be sent — with an empty value.
+        assertTrue(headers.map().containsKey("x-amz-tagging"), "x-amz-tagging must be sent on the PUT");
+        assertEquals("", headers.firstValue("x-amz-tagging").orElse(null));
+    }
+
+    @Test
+    void signedHeaderNames_parsesAndUrlDecodes() {
+        var names = ZeeneaClient.signedHeaderNames(
+                "https://s3/u?X-Amz-SignedHeaders=host%3Bx-amz-server-side-encryption%3Bx-amz-tagging");
+        assertEquals(java.util.List.of("host", "x-amz-server-side-encryption", "x-amz-tagging"), names);
+    }
+
+    @Test
+    void signedHeaderNames_emptyWhenNoQueryOrParam() {
+        assertTrue(ZeeneaClient.signedHeaderNames("https://s3/u").isEmpty());
+        assertTrue(ZeeneaClient.signedHeaderNames("https://s3/u?X-Amz-Date=20260624T0").isEmpty());
+    }
 }
