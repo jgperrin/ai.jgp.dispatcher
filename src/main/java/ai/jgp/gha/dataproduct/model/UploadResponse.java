@@ -1,22 +1,24 @@
 package ai.jgp.gha.dataproduct.model;
 
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 public class UploadResponse {
 
     private final String id;
     private final String url;
-    private final String kmsEncryption;
-    private final String kmsKeyId;
+    private final Map<String, String> headers;
     private final long maxFileSize;
 
-    private UploadResponse(String id, String url, String kmsEncryption,
-                           String kmsKeyId, long maxFileSize) {
+    private UploadResponse(String id, String url, Map<String, String> headers, long maxFileSize) {
         this.id = id;
         this.url = url;
-        this.kmsEncryption = kmsEncryption;
-        this.kmsKeyId = kmsKeyId;
+        this.headers = headers;
         this.maxFileSize = maxFileSize;
     }
 
@@ -29,11 +31,18 @@ public class UploadResponse {
         String url = uploadParams.get("url").getAsString();
         long maxFileSize = root.get("maximumFileSizeInBytes").getAsLong();
 
-        JsonObject headers = uploadParams.getAsJsonObject("headers");
-        String kmsEncryption = headers.get("x-amz-server-side-encryption").getAsString();
-        String kmsKeyId = headers.get("x-amz-server-side-encryption-aws-kms-key-id").getAsString();
+        // Capture EVERY header the server tells us to send on the PUT. The
+        // presigned URL is signed over these headers, so cherry-picking a subset
+        // breaks the SigV4 signature (a missing x-amz-tagging → 403, see #38).
+        Map<String, String> headers = new LinkedHashMap<>();
+        JsonObject headersJson = uploadParams.getAsJsonObject("headers");
+        if (headersJson != null) {
+            for (Map.Entry<String, JsonElement> e : headersJson.entrySet()) {
+                headers.put(e.getKey(), e.getValue().getAsString());
+            }
+        }
 
-        return new UploadResponse(id, url, kmsEncryption, kmsKeyId, maxFileSize);
+        return new UploadResponse(id, url, Collections.unmodifiableMap(headers), maxFileSize);
     }
 
     public String getId() {
@@ -44,12 +53,17 @@ public class UploadResponse {
         return url;
     }
 
+    /** Every header the server requires on the upload PUT (all signed headers). */
+    public Map<String, String> getHeaders() {
+        return headers;
+    }
+
     public String getKmsEncryption() {
-        return kmsEncryption;
+        return headers.get("x-amz-server-side-encryption");
     }
 
     public String getKmsKeyId() {
-        return kmsKeyId;
+        return headers.get("x-amz-server-side-encryption-aws-kms-key-id");
     }
 
     public long getMaxFileSize() {

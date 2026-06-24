@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-06-24
+
+### Fixed
+- **S3 upload no longer fails with `403 SignatureDoesNotMatch`** (#38). The presigned PUT URL is signed over `host;x-amz-server-side-encryption;x-amz-server-side-encryption-aws-kms-key-id;x-amz-tagging`, but `uploadFile` only sent the two KMS headers — the signed (empty) `x-amz-tagging` was never replayed, so S3's reconstructed canonical request diverged from the signed one. `UploadResponse` now captures the **full** `uploadParameters.headers` map, and `uploadFile` sends every one of them plus any header named in the URL's `X-Amz-SignedHeaders` (except `host`), defaulting absent ones (e.g. `x-amz-tagging`) to an empty value. Future-proof: any header the presigner signs is replayed verbatim.
+
 ## [0.5.0] - 2026-06-23
 
 ### Added

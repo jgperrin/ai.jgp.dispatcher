@@ -112,15 +112,28 @@ public class ZeeneaClient {
 
     void uploadFile(UploadResponse uploadResponse) throws IOException, InterruptedException {
         byte[] fileBytes = Files.readAllBytes(Path.of(zipPath));
-        log.fine(">> PUT " + uploadResponse.getUrl());
+        String url = uploadResponse.getUrl();
+        log.fine(">> PUT " + url);
         log.fine(">> File size: " + fileBytes.length + " bytes");
 
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(uploadResponse.getUrl()))
-                .header(K.HEADER_KMS_ENCRYPTION, uploadResponse.getKmsEncryption())
-                .header(K.HEADER_KMS_KEY_ID, uploadResponse.getKmsKeyId())
-                .PUT(HttpRequest.BodyPublishers.ofByteArray(fileBytes))
-                .build();
+        HttpRequest.Builder builder = HttpRequest.newBuilder().uri(URI.create(url));
+
+        // Replay EVERY header the server told us to send. The presigned URL is
+        // signed over these, so sending a subset breaks the SigV4 signature.
+        uploadResponse.getHeaders().forEach(builder::header);
+
+        // Guarantee every header in the URL's X-Amz-SignedHeaders (except host,
+        // which the client sets automatically) is present — S3 returns 403
+        // SignatureDoesNotMatch if a signed header is missing. Any signed header
+        // the server did not enumerate (e.g. an empty x-amz-tagging) is sent with
+        // an empty value, matching what was signed. See #38.
+        for (String signed : signedHeaderNames(url)) {
+            if (!signed.equalsIgnoreCase("host") && !uploadResponse.getHeaders().containsKey(signed)) {
+                builder.header(signed, "");
+            }
+        }
+
+        HttpRequest request = builder.PUT(HttpRequest.BodyPublishers.ofByteArray(fileBytes)).build();
 
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
         logResponse("PUT upload", response);
@@ -129,6 +142,36 @@ public class ZeeneaClient {
             throw new IOException("Failed to upload file. HTTP " + response.statusCode()
                     + ": " + response.body());
         }
+    }
+
+    /**
+     * Extracts the lower-cased header names from a presigned URL's
+     * {@code X-Amz-SignedHeaders} query parameter (semicolon-separated, URL
+     * encoded). Returns an empty list when the URL carries no such parameter.
+     */
+    static java.util.List<String> signedHeaderNames(String url) {
+        int q = url.indexOf('?');
+        if (q < 0) {
+            return java.util.List.of();
+        }
+        for (String param : url.substring(q + 1).split("&")) {
+            int eq = param.indexOf('=');
+            if (eq < 0) {
+                continue;
+            }
+            String key = java.net.URLDecoder.decode(param.substring(0, eq), java.nio.charset.StandardCharsets.UTF_8);
+            if ("X-Amz-SignedHeaders".equalsIgnoreCase(key)) {
+                String value = java.net.URLDecoder.decode(param.substring(eq + 1), java.nio.charset.StandardCharsets.UTF_8);
+                java.util.List<String> names = new java.util.ArrayList<>();
+                for (String h : value.split(";")) {
+                    if (!h.isBlank()) {
+                        names.add(h.trim());
+                    }
+                }
+                return names;
+            }
+        }
+        return java.util.List.of();
     }
 
     void triggerProcessing(String id) throws IOException, InterruptedException {
