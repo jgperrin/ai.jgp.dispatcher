@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-06-23
+
+### Added
+- **Test runs report to the WB2 Test Log as OORS `ObservabilityResults`** (#36) — joining svc, the webapp, the MCP server and the iOS app in the family-wide test-reporting rollout (`doc/oors-test-rollout.md` in svc). Count metrics, with the `failed` metric carrying the verdict; green is derived server-side and self-resolves at ingest.
+- `bin/post-test-run.sh` — the OORS reporter, shared byte-for-byte with svc/mcp (the test use-case stays out of the OORS/OOCS standards themselves, per JGP).
+- `bin/test-gate.sh` — runs `mvn verify` (suite + the 0.80 JaCoCo gate), tallies the surefire XML, and posts the summary (`app=dispatcher`, `suite=gate`). Maven's exit code is preserved; the POST never changes it. The dispatcher has no CI workflow of its own (it runs as a step inside other repos' workflows), so reporting is driven by this local gate.
+- `README.md` **Testing** section documenting the test directory (`src/test/java/**`) and the reporting convention.
+
+Reporting is shell only — no production-code change, so the 80% JaCoCo gate is unaffected. (`K.VERSION` bump only; the pom `<version>` is intentionally left unchanged so the published GitHub-Action jar name is stable.)
+
+
 ## [0.4.6] - 2026-06-05
 
 ### Fixed
