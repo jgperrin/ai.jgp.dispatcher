@@ -5,7 +5,7 @@ package ai.jgp.gha.dataproduct;
  */
 public class K {
 
-    public static final String VERSION = "0.5.1";
+    public static final String VERSION = "0.6.0";
 
     public static final String DEFAULT_CATALOG = "default";
 

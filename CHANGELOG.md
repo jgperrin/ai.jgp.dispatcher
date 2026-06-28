@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-06-27
+
+### Added
+- **Per-asset Zeenea sync-status events** (#35). The uploader was fire-and-forget — whether an asset actually synced to Zeenea lived only in the GitHub Actions log, invisible to the Libot Services backend (svc) and the Workbench UI. After each per-asset upload it now publishes an append-only status event keyed by `<id>:<version>` to a new Kafka topic `controlcenter.spec.status`, on **both success and failure**. The payload carries `status`, `uploadId`, `at` (ISO-8601), `tenant`, `catalog`, and (on failure) `error`. It reuses the existing `KafkaPublisher` and `KAFKA_*` SASL credentials — no new svc URL, HTTP client, or secret — since Kafka is the dispatcher's only svc-bound transport. The publish is **best-effort**: a failed status report (or unreachable broker) logs a warning and never alters the process exit code; it is skipped when Kafka is unconfigured and for pre-built ZIPs that carry no ODPS coordinates. New `K.KAFKA_TOPIC_SPEC_STATUS`, `model.ProductRef`, `model.SyncStatusEvent`, `ZipBuilder.parseProductRef`, `ZeeneaClient.getLastUploadId`/`getLastError`, and `KafkaPublisher.publishStatus`. Consumer side tracked in `ai.jgp.bitol.svc#758`. Twenty new tests; line coverage 88.3% (gate 0.80). The pom `<version>` is intentionally left unchanged so the published GitHub-Action jar name stays stable (`K.VERSION` is the version of record).
+
 ## [0.5.1] - 2026-06-24
 
 ### Fixed
