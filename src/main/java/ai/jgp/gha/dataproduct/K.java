@@ -5,7 +5,7 @@ package ai.jgp.gha.dataproduct;
  */
 public class K {
 
-    public static final String VERSION = "0.5.1";
+    public static final String VERSION = "0.6.0";
 
     public static final String DEFAULT_CATALOG = "default";
 
@@ -32,6 +32,8 @@ public class K {
     public static final String ENV_KAFKA_USER = "KAFKA_USERNAME";
     public static final String ENV_KAFKA_PASSWORD = "KAFKA_PASSWORD";
     public static final String KAFKA_TOPIC_SPEC_INGEST = "controlcenter.spec.ingest";
+    // Per-asset Zeenea sync-status events (#35), consumed by svc (#758).
+    public static final String KAFKA_TOPIC_SPEC_STATUS = "controlcenter.spec.status";
 
     private K() {
     }

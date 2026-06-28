@@ -121,6 +121,56 @@ class ZeeneaClientTest {
 
     @SuppressWarnings("unchecked")
     @Test
+    void getLastUploadId_set_andNoError_afterSuccessfulUpload() throws Exception {
+        HttpResponse<String> r1 = stubResponse(200, UPLOAD_RESPONSE_BODY);
+        HttpResponse<String> r2 = stubResponse(200, "");
+        HttpResponse<String> r3 = stubResponse(204, "");
+        HttpResponse<String> r4 = stubResponse(200, STATUS_PROCESSED_BODY);
+        when(http.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+                .thenReturn(r1, r2, r3, r4);
+
+        ZeeneaClient client = new ZeeneaClient(config, zip.toString(), http);
+        assertTrue(client.upload());
+
+        assertEquals("u-1", client.getLastUploadId());
+        org.junit.jupiter.api.Assertions.assertNull(client.getLastError());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void getLastError_set_andNoUploadId_whenRequestUploadUrlFails() throws Exception {
+        HttpResponse<String> r = stubResponse(500, "boom");
+        when(http.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+                .thenReturn(r);
+
+        ZeeneaClient client = new ZeeneaClient(config, zip.toString(), http);
+        assertFalse(client.upload());
+
+        // No upload id was ever issued on an early failure.
+        org.junit.jupiter.api.Assertions.assertNull(client.getLastUploadId());
+        org.junit.jupiter.api.Assertions.assertNotNull(client.getLastError());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void getLastError_set_butUploadIdRetained_whenProcessingReportsErrors() throws Exception {
+        HttpResponse<String> r1 = stubResponse(200, UPLOAD_RESPONSE_BODY);
+        HttpResponse<String> r2 = stubResponse(200, "");
+        HttpResponse<String> r3 = stubResponse(204, "");
+        HttpResponse<String> r4 = stubResponse(200, STATUS_PROCESSED_WITH_ERRORS);
+        when(http.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+                .thenReturn(r1, r2, r3, r4);
+
+        ZeeneaClient client = new ZeeneaClient(config, zip.toString(), http);
+        assertFalse(client.upload());
+
+        // The upload id was issued before processing reported errors.
+        assertEquals("u-1", client.getLastUploadId());
+        org.junit.jupiter.api.Assertions.assertNotNull(client.getLastError());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
     void upload_returnsFalse_whenRequestUploadUrlFails() throws Exception {
         HttpResponse<String> r = stubResponse(500, "boom");
         when(http.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))

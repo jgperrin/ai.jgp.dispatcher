@@ -1,10 +1,14 @@
 package ai.jgp.gha.dataproduct;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mockConstruction;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.io.IOException;
@@ -16,6 +20,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentCaptor;
 import org.mockito.MockedConstruction;
 import org.mockito.MockedStatic;
 
@@ -324,6 +329,130 @@ class AppTest {
             int code = SystemStubs.catchSystemExit(() -> App.main(args));
 
             assertEquals(1, code);
+        }
+    }
+
+    // --- Sync-status event (#35) ---------------------------------------------
+    // These use a real product YAML so ZipBuilder.parseProductRef and
+    // buildFromProduct run for real (yielding a ProductRef + a temp ZIP); only
+    // ZeeneaClient and KafkaPublisher construction is mocked.
+
+    private Path productYaml() throws IOException {
+        Path yaml = tmp.resolve("my-product.odps.yaml");
+        Files.writeString(yaml, "id: my-product\nversion: 1.2.3\n");
+        return yaml;
+    }
+
+    private String[] kafkaArgs(Path file) {
+        return new String[]{
+                "--file", file.toString(),
+                "--tenant", "acme",
+                "--api-key", "secret",
+                "--kafka-broker", "127.0.0.1:1",
+        };
+    }
+
+    @Test
+    void main_productYaml_uploadSucceeds_publishesZipAndStatusEvent() throws Exception {
+        try (MockedConstruction<ZeeneaClient> zc = mockConstruction(ZeeneaClient.class,
+                (mock, ctx) -> {
+                    when(mock.upload()).thenReturn(true);
+                    when(mock.getLastUploadId()).thenReturn("up-1");
+                });
+             MockedConstruction<KafkaPublisher> kp = mockConstruction(KafkaPublisher.class,
+                     (mock, ctx) -> {
+                         when(mock.isConnected()).thenReturn(true);
+                         when(mock.publishZip(anyString(), anyString(), any())).thenReturn(true);
+                         when(mock.publishStatus(anyString(), anyString())).thenReturn(true);
+                     })) {
+
+            int code = SystemStubs.catchSystemExit(() -> App.main(kafkaArgs(productYaml())));
+
+            assertEquals(0, code);
+            assertEquals(1, kp.constructed().size());
+            KafkaPublisher pub = kp.constructed().get(0);
+
+            // Spec bundle published to the ingest topic on success.
+            verify(pub).publishZip(eq(K.KAFKA_TOPIC_SPEC_INGEST), anyString(), any());
+
+            // Status event keyed by <id>:<version>, marked success, with uploadId.
+            ArgumentCaptor<String> key = ArgumentCaptor.forClass(String.class);
+            ArgumentCaptor<String> json = ArgumentCaptor.forClass(String.class);
+            verify(pub).publishStatus(key.capture(), json.capture());
+            assertEquals("my-product:1.2.3", key.getValue());
+            assertTrue(json.getValue().contains("\"status\":\"success\""), json.getValue());
+            assertTrue(json.getValue().contains("\"uploadId\":\"up-1\""), json.getValue());
+        }
+    }
+
+    @Test
+    void main_productYaml_uploadFails_publishesFailureStatus_butNotZip_exitsOne() throws Exception {
+        try (MockedConstruction<ZeeneaClient> zc = mockConstruction(ZeeneaClient.class,
+                (mock, ctx) -> {
+                    when(mock.upload()).thenReturn(false);
+                    when(mock.getLastError()).thenReturn("HTTP 403: SignatureDoesNotMatch");
+                });
+             MockedConstruction<KafkaPublisher> kp = mockConstruction(KafkaPublisher.class,
+                     (mock, ctx) -> {
+                         when(mock.isConnected()).thenReturn(true);
+                         when(mock.publishStatus(anyString(), anyString())).thenReturn(true);
+                     })) {
+
+            int code = SystemStubs.catchSystemExit(() -> App.main(kafkaArgs(productYaml())));
+
+            // Upload failure surfaces as a non-zero exit (fail-loudly, unchanged).
+            assertEquals(1, code);
+            // Status event is still published on failure...
+            assertEquals(1, kp.constructed().size());
+            KafkaPublisher pub = kp.constructed().get(0);
+            ArgumentCaptor<String> json = ArgumentCaptor.forClass(String.class);
+            verify(pub).publishStatus(eq("my-product:1.2.3"), json.capture());
+            assertTrue(json.getValue().contains("\"status\":\"failed\""), json.getValue());
+            assertTrue(json.getValue().contains("SignatureDoesNotMatch"), json.getValue());
+            // ...but the spec bundle is NOT published when the upload failed.
+            verify(pub, never()).publishZip(anyString(), anyString(), any());
+        }
+    }
+
+    @Test
+    void main_productYaml_statusPublishThrows_isSwallowed_exitsZero() throws Exception {
+        try (MockedConstruction<ZeeneaClient> zc = mockConstruction(ZeeneaClient.class,
+                (mock, ctx) -> when(mock.upload()).thenReturn(true));
+             MockedConstruction<KafkaPublisher> kp = mockConstruction(KafkaPublisher.class,
+                     (mock, ctx) -> {
+                         when(mock.isConnected()).thenReturn(true);
+                         when(mock.publishZip(anyString(), anyString(), any())).thenReturn(true);
+                         when(mock.publishStatus(anyString(), anyString()))
+                                 .thenThrow(new RuntimeException("kafka down"));
+                     })) {
+
+            int code = SystemStubs.catchSystemExit(() -> App.main(kafkaArgs(productYaml())));
+
+            // A failed status publish must not change the exit code.
+            assertEquals(0, code);
+        }
+    }
+
+    @Test
+    void main_rawZip_uploadSucceeds_publishesZip_butNoStatusEvent() throws Exception {
+        Path zip = tmp.resolve("bundle.zip");
+        Files.writeString(zip, "zipdata");
+
+        try (MockedConstruction<ZeeneaClient> zc = mockConstruction(ZeeneaClient.class,
+                (mock, ctx) -> when(mock.upload()).thenReturn(true));
+             MockedConstruction<KafkaPublisher> kp = mockConstruction(KafkaPublisher.class,
+                     (mock, ctx) -> {
+                         when(mock.isConnected()).thenReturn(true);
+                         when(mock.publishZip(anyString(), anyString(), any())).thenReturn(true);
+                     })) {
+
+            int code = SystemStubs.catchSystemExit(() -> App.main(kafkaArgs(zip)));
+
+            assertEquals(0, code);
+            KafkaPublisher pub = kp.constructed().get(0);
+            // A pre-built ZIP carries no ODPS coordinates → no status event.
+            verify(pub).publishZip(eq(K.KAFKA_TOPIC_SPEC_INGEST), anyString(), any());
+            verify(pub, never()).publishStatus(anyString(), anyString());
         }
     }
 }
