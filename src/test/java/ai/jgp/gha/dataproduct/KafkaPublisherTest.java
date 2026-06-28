@@ -49,6 +49,18 @@ class KafkaPublisherTest {
 
     @Test
     @Timeout(30)
+    void publishStatus_returnsFalse_whenBrokerUnreachable() {
+        KafkaPublisher pub = new KafkaPublisher(UNREACHABLE_PLAINTEXT, null, null);
+        try {
+            boolean ok = pub.publishStatus("prod-1:1.0.0", "{\"status\":\"success\"}");
+            assertFalse(ok);
+        } finally {
+            pub.close();
+        }
+    }
+
+    @Test
+    @Timeout(30)
     void close_isIdempotentOnUnconnectedProducer() {
         KafkaPublisher pub = new KafkaPublisher(UNREACHABLE_PLAINTEXT, null, null);
         assertDoesNotThrow(pub::close);

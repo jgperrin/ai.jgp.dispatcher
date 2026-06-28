@@ -42,6 +42,38 @@ class ZipBuilderTest {
     Path tmp;
 
     @Test
+    void parseProductRef_readsIdAndNormalizedVersion() throws IOException {
+        Path yaml = tmp.resolve("p.odps.yaml");
+        Files.writeString(yaml, "id: my-product\nversion: v1.2.3\n");
+
+        var ref = ZipBuilder.parseProductRef(yaml.toString());
+
+        assertEquals("my-product", ref.id());
+        assertEquals("1.2.3", ref.version());
+        assertTrue(ref.hasId());
+    }
+
+    @Test
+    void parseProductRef_returnsNullFields_onUnreadableFile() {
+        var ref = ZipBuilder.parseProductRef(tmp.resolve("does-not-exist.odps.yaml").toString());
+
+        assertNull(ref.id());
+        assertNull(ref.version());
+        assertFalse(ref.hasId());
+    }
+
+    @Test
+    void parseProductRef_returnsNullFields_whenKeysMissing() throws IOException {
+        Path yaml = tmp.resolve("empty.odps.yaml");
+        Files.writeString(yaml, "name: no-coordinates\n");
+
+        var ref = ZipBuilder.parseProductRef(yaml.toString());
+
+        assertNull(ref.id());
+        assertNull(ref.version());
+    }
+
+    @Test
     void normalizeVersion_stripsLeadingV() {
         assertEquals("1.2.3", ZipBuilder.normalizeVersion("v1.2.3"));
     }

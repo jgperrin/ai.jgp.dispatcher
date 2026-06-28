@@ -1,5 +1,6 @@
 package ai.jgp.gha.dataproduct;
 
+import ai.jgp.gha.dataproduct.model.ProductRef;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
@@ -128,6 +129,32 @@ public class ZipBuilder {
         }
 
         return zipFile;
+    }
+
+    /**
+     * Parses just the identifying coordinates ({@code id} + normalized
+     * {@code version}) from a product YAML, for keying the sync-status event
+     * (#35). Best-effort: never throws — on any read/parse failure it returns a
+     * {@link ProductRef} with null fields, so a status event can still be
+     * attempted (and skipped if it has no id).
+     *
+     * @param productYamlPath path to the .odps.yaml file
+     * @return the product's id/version (fields may be null on failure)
+     */
+    public static ProductRef parseProductRef(String productYamlPath) {
+        try {
+            YAMLMapper yamlMapper = new YAMLMapper();
+            JsonNode root = yamlMapper.readTree(Files.readString(Path.of(productYamlPath)));
+            JsonNode idNode = root.path("id");
+            JsonNode versionNode = root.path("version");
+            String id = idNode.isMissingNode() || idNode.isNull() ? null : idNode.asText();
+            String version = versionNode.isMissingNode() || versionNode.isNull()
+                    ? null : normalizeVersion(versionNode.asText());
+            return new ProductRef(id, version);
+        } catch (Exception e) {
+            log.fine("Could not parse product ref from " + productYamlPath + ": " + e.getMessage());
+            return new ProductRef(null, null);
+        }
     }
 
     /**

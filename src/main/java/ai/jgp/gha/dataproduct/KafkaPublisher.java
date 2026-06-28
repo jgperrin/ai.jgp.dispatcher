@@ -12,6 +12,7 @@ import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.KeyStore;
@@ -140,17 +141,41 @@ public class KafkaPublisher {
     public boolean publishZip(String topic, String key, byte[] zipData) {
         log.fine("Sending ZIP to topic " + topic + " (key: " + key
                 + ", size: " + zipData.length + " bytes)");
-        ProducerRecord<String, byte[]> record = new ProducerRecord<>(topic, key, zipData);
+        return send(topic, key, zipData);
+    }
+
+    /**
+     * Publishes an append-only sync-status event to the status topic
+     * ({@link K#KAFKA_TOPIC_SPEC_STATUS}) as a single UTF-8 JSON message (#35).
+     * Best-effort: returns false on failure without throwing, so a failed
+     * status report never breaks the caller.
+     *
+     * @param key  the message key (e.g. {@code "<id>:<version>"})
+     * @param json the event payload as JSON
+     * @return true if published successfully, false otherwise
+     */
+    public boolean publishStatus(String key, String json) {
+        log.fine("Sending sync-status to topic " + K.KAFKA_TOPIC_SPEC_STATUS
+                + " (key: " + key + ")");
+        return send(K.KAFKA_TOPIC_SPEC_STATUS, key, json.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * Sends a single record and blocks until it completes or fails. Shared by
+     * {@link #publishZip} and {@link #publishStatus}.
+     */
+    private boolean send(String topic, String key, byte[] value) {
+        ProducerRecord<String, byte[]> record = new ProducerRecord<>(topic, key, value);
         try {
             var metadata = producer.send(record).get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-            log.fine("Published ZIP to " + metadata.topic()
+            log.fine("Published to " + metadata.topic()
                     + " partition " + metadata.partition()
                     + " offset " + metadata.offset());
             return true;
         } catch (Exception e) {
             Throwable cause = e instanceof ExecutionException ? e.getCause() : e;
-            System.err.println("  Failed to publish ZIP: " + cause.getMessage());
-            log.log(Level.WARNING, "Kafka send failed for ZIP", cause);
+            System.err.println("  Failed to publish to " + topic + ": " + cause.getMessage());
+            log.log(Level.WARNING, "Kafka send failed for " + topic, cause);
             return false;
         }
     }

@@ -23,6 +23,12 @@ public class ZeeneaClient {
     private final String zipPath;
     private final HttpClient httpClient;
 
+    // Captured during upload() for the sync-status event (#35). lastUploadId is
+    // the Zeenea upload id once obtained (null on early failure); lastError is a
+    // human-readable reason when upload() returns false or throws.
+    private String lastUploadId;
+    private String lastError;
+
     public ZeeneaClient(CliConfig config) {
         this(config, config.getFilePath());
     }
@@ -55,14 +61,16 @@ public class ZeeneaClient {
             // Step 1: Request upload URL
             System.out.println("[1/4] Requesting upload URL...");
             UploadResponse uploadResponse = requestUploadUrl();
+            this.lastUploadId = uploadResponse.getId();
             System.out.println("       Upload ID: " + uploadResponse.getId());
             System.out.println("       Max file size: " + (uploadResponse.getMaxFileSize() / 1024 / 1024) + " MB");
 
             // Validate file size
             long fileSize = Files.size(Path.of(zipPath));
             if (fileSize > uploadResponse.getMaxFileSize()) {
-                System.err.println("Error: file size (" + fileSize + " bytes) exceeds maximum ("
-                        + uploadResponse.getMaxFileSize() + " bytes)");
+                this.lastError = "file size (" + fileSize + " bytes) exceeds maximum ("
+                        + uploadResponse.getMaxFileSize() + " bytes)";
+                System.err.println("Error: " + this.lastError);
                 return false;
             }
 
@@ -81,12 +89,30 @@ public class ZeeneaClient {
             return pollStatus(uploadResponse.getId());
 
         } catch (Exception e) {
-            System.err.println("Error: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+            this.lastError = e.getClass().getSimpleName() + ": " + e.getMessage();
+            System.err.println("Error: " + this.lastError);
             if (e.getCause() != null) {
                 System.err.println("Caused by: " + e.getCause());
             }
             return false;
         }
+    }
+
+    /**
+     * The Zeenea upload id obtained during the last {@link #upload()}, or null
+     * if the upload failed before one was issued. Used to populate the
+     * sync-status event (#35).
+     */
+    public String getLastUploadId() {
+        return lastUploadId;
+    }
+
+    /**
+     * A human-readable reason the last {@link #upload()} failed, or null if it
+     * succeeded (or has not run). Used to populate the sync-status event (#35).
+     */
+    public String getLastError() {
+        return lastError;
     }
 
     UploadResponse requestUploadUrl() throws IOException, InterruptedException {
@@ -240,6 +266,7 @@ public class ZeeneaClient {
                     for (int i = 0; i < errors.size(); i++) {
                         System.err.println("    - " + errors.get(i).getAsString());
                     }
+                    this.lastError = "processing reported " + errors.size() + " error(s)";
                     return false;
                 }
 
@@ -247,7 +274,8 @@ public class ZeeneaClient {
             }
         }
 
-        System.err.println("Error: processing timed out after " + K.POLL_MAX_RETRIES + " attempts");
+        this.lastError = "processing timed out after " + K.POLL_MAX_RETRIES + " attempts";
+        System.err.println("Error: " + this.lastError);
         return false;
     }
 
