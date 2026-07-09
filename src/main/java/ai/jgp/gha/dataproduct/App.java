@@ -149,9 +149,9 @@ public class App {
      * Publishes to Kafka for a single processed asset, using one publisher for
      * both messages:
      * <ul>
-     *   <li>the spec bundle to {@link K#KAFKA_TOPIC_SPEC_INGEST}, only when the
+     *   <li>the spec bundle to {@link K#KAFKA_TOPIC_DESCRIPTORS}, only when the
      *       Zeenea upload succeeded (unchanged behavior);</li>
-     *   <li>an append-only sync-status event to {@link K#KAFKA_TOPIC_SPEC_STATUS}
+     *   <li>an append-only sync-status event to {@link K#KAFKA_TOPIC_CATALOG_FEEDBACK}
      *       on <strong>both</strong> success and failure, when the asset has an
      *       ODPS id (#35).</li>
      * </ul>
@@ -211,7 +211,7 @@ public class App {
         }
     }
 
-    /** Reads the built ZIP and publishes it to the spec-ingest topic. */
+    /** Reads the built ZIP and publishes it to the descriptors topic. */
     private static void publishZip(KafkaPublisher publisher, String zipPath) throws java.io.IOException {
         File zipFile = new File(zipPath);
         byte[] zipData = Files.readAllBytes(zipFile.toPath());
@@ -219,7 +219,7 @@ public class App {
 
         log.fine("Read ZIP file: " + key + " (" + zipData.length + " bytes)");
 
-        boolean ok = publisher.publishZip(K.KAFKA_TOPIC_SPEC_INGEST, key, zipData);
+        boolean ok = publisher.publishZip(K.KAFKA_TOPIC_DESCRIPTORS, key, zipData);
         if (ok) {
             System.out.println("  Published spec bundle: " + key + " (" + zipData.length + " bytes)");
         } else {

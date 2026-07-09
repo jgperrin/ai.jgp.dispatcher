@@ -5,7 +5,7 @@ import com.google.gson.JsonObject;
 /**
  * An append-only event recording the outcome of a single ODPS product's
  * synchronization to Zeenea. Published to the Kafka topic
- * {@code controlcenter.spec.status} so the Libot Services backend (svc) and
+ * {@code workbench.catalog.feedback} so the Libot Services backend (svc) and
  * the Workbench UI can surface "last synced to Zeenea" — and failures — per
  * artifact, instead of the outcome living only in the GitHub Actions log
  * (see #35; consumer side: ai.jgp.bitol.svc#758).

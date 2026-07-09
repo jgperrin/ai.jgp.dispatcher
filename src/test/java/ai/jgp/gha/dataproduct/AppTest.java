@@ -373,7 +373,7 @@ class AppTest {
             KafkaPublisher pub = kp.constructed().get(0);
 
             // Spec bundle published to the ingest topic on success.
-            verify(pub).publishZip(eq(K.KAFKA_TOPIC_SPEC_INGEST), anyString(), any());
+            verify(pub).publishZip(eq(K.KAFKA_TOPIC_DESCRIPTORS), anyString(), any());
 
             // Status event keyed by <id>:<version>, marked success, with uploadId.
             ArgumentCaptor<String> key = ArgumentCaptor.forClass(String.class);
@@ -451,7 +451,7 @@ class AppTest {
             assertEquals(0, code);
             KafkaPublisher pub = kp.constructed().get(0);
             // A pre-built ZIP carries no ODPS coordinates → no status event.
-            verify(pub).publishZip(eq(K.KAFKA_TOPIC_SPEC_INGEST), anyString(), any());
+            verify(pub).publishZip(eq(K.KAFKA_TOPIC_DESCRIPTORS), anyString(), any());
             verify(pub, never()).publishStatus(anyString(), anyString());
         }
     }
