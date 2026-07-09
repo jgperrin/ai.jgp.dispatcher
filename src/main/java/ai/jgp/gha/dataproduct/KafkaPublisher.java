@@ -52,7 +52,7 @@ public class KafkaPublisher {
         System.out.println("       User:     " + (user != null ? user : "(not set)"));
         System.out.println("       Password: " + (password != null ? "****" : "(not set)"));
         System.out.println("       Auth:     " + authMode);
-        System.out.println("       Topic:    " + K.KAFKA_TOPIC_SPEC_INGEST);
+        System.out.println("       Topic:    " + K.KAFKA_TOPIC_DESCRIPTORS);
         System.out.println("       Timeout:  " + PROBE_TIMEOUT_SECONDS + "s probe, "
                 + (MAX_BLOCK_MS / 1000) + "s max block");
 
@@ -108,7 +108,7 @@ public class KafkaPublisher {
         // Probe broker connectivity — forces metadata fetch with a short timeout
         boolean reachable;
         try {
-            CompletableFuture.supplyAsync(() -> producer.partitionsFor(K.KAFKA_TOPIC_SPEC_INGEST))
+            CompletableFuture.supplyAsync(() -> producer.partitionsFor(K.KAFKA_TOPIC_DESCRIPTORS))
                     .get(PROBE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
             reachable = true;
             log.fine("Kafka broker is reachable");
@@ -146,7 +146,7 @@ public class KafkaPublisher {
 
     /**
      * Publishes an append-only sync-status event to the status topic
-     * ({@link K#KAFKA_TOPIC_SPEC_STATUS}) as a single UTF-8 JSON message (#35).
+     * ({@link K#KAFKA_TOPIC_CATALOG_FEEDBACK}) as a single UTF-8 JSON message (#35).
      * Best-effort: returns false on failure without throwing, so a failed
      * status report never breaks the caller.
      *
@@ -155,9 +155,9 @@ public class KafkaPublisher {
      * @return true if published successfully, false otherwise
      */
     public boolean publishStatus(String key, String json) {
-        log.fine("Sending sync-status to topic " + K.KAFKA_TOPIC_SPEC_STATUS
+        log.fine("Sending sync-status to topic " + K.KAFKA_TOPIC_CATALOG_FEEDBACK
                 + " (key: " + key + ")");
-        return send(K.KAFKA_TOPIC_SPEC_STATUS, key, json.getBytes(StandardCharsets.UTF_8));
+        return send(K.KAFKA_TOPIC_CATALOG_FEEDBACK, key, json.getBytes(StandardCharsets.UTF_8));
     }
 
     /**

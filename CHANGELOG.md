@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-07-08
+
+### Changed
+
+- **Kafka naming convention** (#41, epic `bitol.svc#843`). Topics renamed: `controlcenter.spec.ingest` -> `controlcenter.dataproduct.descriptors` (constant `K.KAFKA_TOPIC_DESCRIPTORS`), `controlcenter.spec.status` -> `workbench.catalog.feedback` (constant `K.KAFKA_TOPIC_CATALOG_FEEDBACK`). Broker topics pre-created (ops#54); the consuming workflow builds from the default branch, so this lands on merge. Historical changelog entries keep the old names by design.
+
 ## [0.6.0] - 2026-06-27
 
 ### Added

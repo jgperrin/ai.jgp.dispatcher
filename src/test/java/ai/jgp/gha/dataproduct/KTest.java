@@ -36,7 +36,7 @@ class KTest {
 
     @Test
     void kafkaTopic_isControlCenterIngest() {
-        assertEquals("controlcenter.spec.ingest", K.KAFKA_TOPIC_SPEC_INGEST);
+        assertEquals("controlcenter.dataproduct.descriptors", K.KAFKA_TOPIC_DESCRIPTORS);
     }
 
     @Test

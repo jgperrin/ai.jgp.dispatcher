@@ -10,7 +10,7 @@ The uploader takes a ZIP file containing `.odps.yaml` and `.odcs.yaml` descripto
 2. **Upload** the ZIP file to the provided S3 URL
 3. **Trigger** processing for the target catalog
 4. **Poll** until processing completes and report the results
-5. **Publish to Kafka** (optional) — the entire spec ZIP is published as a single binary message to the `controlcenter.spec.ingest` topic
+5. **Publish to Kafka** (optional) — the entire spec ZIP is published as a single binary message to the `controlcenter.dataproduct.descriptors` topic
 
 Steps 1–4 upload to Zeenea. Step 5 runs only when Kafka is configured and the Zeenea upload succeeds.
 
@@ -52,7 +52,7 @@ For each changed product, `ZipBuilder.buildFromProduct()` creates a versioned ZI
 
 ### Stage 6: Publish ZIP to Kafka (optional)
 
-If Kafka credentials are configured, `KafkaPublisher.publishZip()` sends the **entire ZIP as a single binary message** to the `controlcenter.spec.ingest` topic, keyed by the ZIP filename. The Control Center extracts the specs and advances the data products to `SPEC_READY`. If the broker is unreachable, this step is skipped with a warning — the Zeenea upload still counts as success.
+If Kafka credentials are configured, `KafkaPublisher.publishZip()` sends the **entire ZIP as a single binary message** to the `controlcenter.dataproduct.descriptors` topic, keyed by the ZIP filename. The Control Center extracts the specs and advances the data products to `SPEC_READY`. If the broker is unreachable, this step is skipped with a warning — the Zeenea upload still counts as success.
 
 ### Process diagram
 
@@ -96,7 +96,7 @@ sequenceDiagram
 
     Note over D,K: Stage 6: Publish to Kafka (optional)
     D->>K: probe broker (5s timeout)
-    D->>K: publish ZIP to controlcenter.spec.ingest
+    D->>K: publish ZIP to controlcenter.dataproduct.descriptors
 ```
 
 ## Requirements
@@ -156,7 +156,7 @@ Or use the convenience wrapper (auto-builds if needed):
 
 #### Kafka (optional)
 
-When configured, the uploader publishes each YAML spec from the ZIP to the `controlcenter.spec.ingest` Kafka topic after a successful Zeenea upload. If no broker is provided, Kafka publishing is silently skipped.
+When configured, the uploader publishes each YAML spec from the ZIP to the `controlcenter.dataproduct.descriptors` Kafka topic after a successful Zeenea upload. If no broker is provided, Kafka publishing is silently skipped.
 
 | Flag               | Env Variable       | Required | Default | Description                                |
 |--------------------|--------------------|---------|---------|--------------------------------------------|

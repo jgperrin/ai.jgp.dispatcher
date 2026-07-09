@@ -40,7 +40,7 @@ class KafkaPublisherTest {
     void publishZip_returnsFalse_whenBrokerUnreachable() {
         KafkaPublisher pub = new KafkaPublisher(UNREACHABLE_PLAINTEXT, null, null);
         try {
-            boolean ok = pub.publishZip(K.KAFKA_TOPIC_SPEC_INGEST, "key.zip", new byte[]{1, 2, 3});
+            boolean ok = pub.publishZip(K.KAFKA_TOPIC_DESCRIPTORS, "key.zip", new byte[]{1, 2, 3});
             assertFalse(ok);
         } finally {
             pub.close();
