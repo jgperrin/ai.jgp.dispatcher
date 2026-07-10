@@ -380,7 +380,8 @@ class AppTest {
             ArgumentCaptor<String> json = ArgumentCaptor.forClass(String.class);
             verify(pub).publishStatus(key.capture(), json.capture());
             assertEquals("my-product:1.2.3", key.getValue());
-            assertTrue(json.getValue().contains("\"status\":\"success\""), json.getValue());
+            assertTrue(json.getValue().contains("\"kind\":\"ObservabilityResults\""), json.getValue());
+            assertTrue(json.getValue().contains("\"status\":\"pass\""), json.getValue());
             assertTrue(json.getValue().contains("\"uploadId\":\"up-1\""), json.getValue());
         }
     }
@@ -407,7 +408,7 @@ class AppTest {
             KafkaPublisher pub = kp.constructed().get(0);
             ArgumentCaptor<String> json = ArgumentCaptor.forClass(String.class);
             verify(pub).publishStatus(eq("my-product:1.2.3"), json.capture());
-            assertTrue(json.getValue().contains("\"status\":\"failed\""), json.getValue());
+            assertTrue(json.getValue().contains("\"status\":\"fail\""), json.getValue());
             assertTrue(json.getValue().contains("SignatureDoesNotMatch"), json.getValue());
             // ...but the spec bundle is NOT published when the upload failed.
             verify(pub, never()).publishZip(anyString(), anyString(), any());
