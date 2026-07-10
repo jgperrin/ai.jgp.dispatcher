@@ -1,5 +1,6 @@
 package ai.jgp.gha.dataproduct.model;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
 /**
@@ -9,6 +10,12 @@ import com.google.gson.JsonObject;
  * the Workbench UI can surface "last synced to Zeenea" — and failures — per
  * artifact, instead of the outcome living only in the GitHub Actions log
  * (see #35; consumer side: ai.jgp.bitol.svc#758).
+ *
+ * <p>Serialized as an OORS {@code ObservabilityResults} envelope (#43) with a
+ * single {@code results[]} entry, matching what the consumer
+ * ({@code ZeeneaSyncStatusConsumerService.handleMessage}) parses: the sync
+ * outcome is {@code results[0].status} ({@code pass}/{@code fail}) and
+ * uploadId/tenant/catalog/error ride in {@code results[0].metadata}.
  *
  * <p>The event is keyed by {@code <id>:<version>} (see {@link #key()}). It is
  * emitted on both success and failure; {@code uploadId} may be absent on early
@@ -49,28 +56,46 @@ public class SyncStatusEvent {
     }
 
     /**
-     * Serialises the event to JSON. {@code uploadId}, {@code tenant} and
-     * {@code catalog} are omitted when null; {@code error} is included only on
-     * failure (and when non-null).
+     * Serialises the event to an OORS {@code ObservabilityResults} envelope
+     * (#43). {@code uploadId}, {@code tenant} and {@code catalog} are omitted
+     * from {@code results[0].metadata} when null; {@code error} is included
+     * only on failure (and when non-null).
      */
     public String toJson() {
-        JsonObject o = new JsonObject();
-        o.addProperty("id", id);
-        o.addProperty("version", version);
-        o.addProperty("status", status());
+        JsonObject metadata = new JsonObject();
         if (uploadId != null) {
-            o.addProperty("uploadId", uploadId);
+            metadata.addProperty("uploadId", uploadId);
         }
-        o.addProperty("at", at);
         if (tenant != null) {
-            o.addProperty("tenant", tenant);
+            metadata.addProperty("tenant", tenant);
         }
         if (catalog != null) {
-            o.addProperty("catalog", catalog);
+            metadata.addProperty("catalog", catalog);
         }
         if (!success && error != null) {
-            o.addProperty("error", error);
+            metadata.addProperty("error", error);
         }
+
+        JsonObject result = new JsonObject();
+        result.addProperty("id", key());
+        result.addProperty("type", "state");
+        result.addProperty("name", "Zeenea sync");
+        result.addProperty("status", success ? "pass" : "fail");
+        result.add("metadata", metadata);
+
+        JsonArray results = new JsonArray();
+        results.add(result);
+
+        JsonObject source = new JsonObject();
+        source.addProperty("process", "zeenea-sync");
+        source.addProperty("vendor", "dispatcher");
+
+        JsonObject o = new JsonObject();
+        o.addProperty("apiVersion", "v0.1.0");
+        o.addProperty("kind", "ObservabilityResults");
+        o.addProperty("observedAt", at);
+        o.add("source", source);
+        o.add("results", results);
         return o.toString();
     }
 }

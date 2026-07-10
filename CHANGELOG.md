@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.2] - 2026-07-10
+
+### Fixed
+
+- **Sync-status events are now OORS** (#43). `SyncStatusEvent.toJson()` emits an `ObservabilityResults` envelope (`apiVersion` v0.1.0, `kind`, `observedAt`, `source`, one `results[]` entry with id `<artifactId>:<version>`, status `pass`/`fail`, and metadata uploadId/tenant/catalog/error) matching the `bitol.svc` consumer, which was skipping every flat-JSON message ("no results[]"). Kafka key unchanged.
+- **Version lockstep**: `pom.xml` had drifted to 0.4.5 while `K.VERSION` was 0.6.1; both now read 0.6.2.
+
 ## [0.6.1] - 2026-07-08
 
 ### Changed
