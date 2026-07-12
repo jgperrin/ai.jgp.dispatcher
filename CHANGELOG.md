@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.5] - 2026-07-11
+
+### Changed
+
+- **Org UUID resolves from repo-committed metadata** (#49, epic `controlcenter#99`). The org id for the `x-org-id` header now defaults to the `orgId:` field of `.workbench.yaml` next to the specs (`--dir` in directory mode, the product file's parent in single-file mode) — the Workbench commits it at publish time (bitol.svc#872), so published repos need zero identity setup. `--org-id` / `X_ORG_ID` become overrides. Fail-closed unchanged when Kafka is configured and no source yields a value; the error now names all three sources. `.workbench.yaml` is never treated as a spec.
+
 ## [0.6.4] - 2026-07-11
 
 ### Added

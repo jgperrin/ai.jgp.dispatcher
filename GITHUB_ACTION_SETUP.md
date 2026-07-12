@@ -47,9 +47,9 @@ If you want the uploader to publish specs to the Data Product Control Center via
 | `KAFKA_BROKER_URL` | Kafka broker URL (e.g. `api.jgp.ai:9093`)           | No                |
 | `KAFKA_USERNAME`   | SASL username for Kafka SCRAM-SHA-512 authentication | No                |
 | `KAFKA_PASSWORD`   | SASL password for Kafka authentication               | No                |
-| `X_ORG_ID`         | Authoring tenant's org UUID, stamped as the `x-org-id` header on every descriptors record | When Kafka is set |
+| `X_ORG_ID`         | Authoring tenant's org UUID, stamped as the `x-org-id` header on every descriptors record | No (override) |
 
-The Control Center drops descriptors records without a valid `x-org-id` header, so the uploader fails closed: if `KAFKA_BROKER_URL` is set but `X_ORG_ID` is missing, the run errors out before publishing anything.
+The org UUID normally comes from the Workbench-committed `.workbench.yaml` (`orgId:` field) sitting next to the specs — published repos need no setup for it. The `X_ORG_ID` secret (or `--org-id` flag) is an override for repos without the metadata file. The Control Center drops descriptors records without a valid `x-org-id` header, so the uploader fails closed: if `KAFKA_BROKER_URL` is set and no org id resolves from flag, env, or `.workbench.yaml`, the run errors out before publishing anything.
 
 ## Step 2: Create the Workflow File
 

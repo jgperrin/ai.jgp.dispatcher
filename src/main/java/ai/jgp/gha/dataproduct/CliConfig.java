@@ -111,6 +111,9 @@ public class CliConfig {
         if (kafkaUser == null) kafkaUser = envOrNull(K.ENV_KAFKA_USER);
         if (kafkaPassword == null) kafkaPassword = envOrNull(K.ENV_KAFKA_PASSWORD);
         if (orgId == null) orgId = envOrNull(K.ENV_ORG_ID);
+        // #49: the Workbench commits the org UUID next to the specs at
+        // publish time; flag/env act as overrides.
+        if (orgId == null) orgId = orgIdFromMetadata(dir, file);
 
         // Validate required fields
         boolean valid = true;
@@ -135,7 +138,9 @@ public class CliConfig {
         // Fail closed: the CC drops descriptors records without a valid
         // x-org-id header, so publishing without an org id is never useful.
         if (kafkaBroker != null && (orgId == null || orgId.isBlank())) {
-            System.err.println("Error: --org-id is required when Kafka is configured (or set X_ORG_ID)");
+            System.err.println("Error: an org id is required when Kafka is configured "
+                    + "(--org-id, X_ORG_ID, or an `orgId:` entry in "
+                    + K.ORG_METADATA_FILE + " next to the specs)");
             valid = false;
         }
         if (!valid) {
@@ -169,6 +174,35 @@ public class CliConfig {
         return (value == null || value.isBlank()) ? null : value;
     }
 
+    /**
+     * Reads {@code orgId:} from the Workbench-committed metadata file
+     * ({@link K#ORG_METADATA_FILE}) in the spec directory — {@code --dir} in
+     * directory mode, the product file's parent in single-file mode (#49).
+     * Returns null when the file is absent or unreadable (the fail-closed
+     * validation downstream reports the actionable error).
+     */
+    private static String orgIdFromMetadata(String dir, String file) {
+        Path base = null;
+        if (dir != null && !dir.isBlank()) {
+            base = Path.of(dir);
+        } else if (file != null && !file.isBlank()) {
+            base = Path.of(file).toAbsolutePath().getParent();
+        }
+        if (base == null) return null;
+        Path metadata = base.resolve(K.ORG_METADATA_FILE);
+        if (!Files.isRegularFile(metadata)) return null;
+        try {
+            var yaml = new com.fasterxml.jackson.databind.ObjectMapper(
+                    new com.fasterxml.jackson.dataformat.yaml.YAMLFactory());
+            var node = yaml.readTree(Files.readString(metadata)).path("orgId");
+            String value = node.isMissingNode() || node.isNull() ? null : node.asText();
+            return (value == null || value.isBlank()) ? null : value.trim();
+        } catch (Exception e) {
+            System.err.println("Warning: could not read " + metadata + ": " + e.getMessage());
+            return null;
+        }
+    }
+
     private static String nextArg(String[] args, int index, String flag) {
         if (index + 1 >= args.length) {
             System.err.println("Error: " + flag + " requires a value");
@@ -195,7 +229,8 @@ public class CliConfig {
         System.out.println("  --kafka-user <user>     Kafka SASL username (optional)");
         System.out.println("  --kafka-password <pwd>  Kafka SASL password (optional)");
         System.out.println("  --org-id <uuid>         Authoring org UUID, stamped as x-org-id");
-        System.out.println("                          (required when Kafka is configured)");
+        System.out.println("                          (required when Kafka is configured; defaults");
+        System.out.println("                          to orgId from " + K.ORG_METADATA_FILE + " next to the specs)");
         System.out.println("  --debug                 Enable debug logging");
         System.out.println("  --version, -v           Show version");
         System.out.println("  --help, -h              Show this help");
