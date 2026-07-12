@@ -123,7 +123,8 @@ class SchemaValidatorTest {
     void nonSpecEntriesAreIgnored() throws IOException {
         Path zip = zipOf(Map.of(
                 "podem/imdb.odps.yaml", VALID_ODPS,
-                "README.md", "# not a spec"));
+                "README.md", "# not a spec",
+                "podem/.workbench.yaml", "orgId: 3f2b8c1e-9a4d-4e7f-b6a5-1c2d3e4f5a6b"));
         List<String> violations = SchemaValidator.validateZip(zip);
         assertTrue(violations.isEmpty(), () -> String.join("\n", violations));
     }

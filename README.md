@@ -165,7 +165,7 @@ When configured, the uploader publishes each YAML spec from the ZIP to the `cont
 | `--kafka-broker`   | `KAFKA_BROKER_URL` | No      | -       | Kafka broker URL (e.g. `api.jgp.ai:9093`)  |
 | `--kafka-user`     | `KAFKA_USERNAME`   | No      | -       | SASL username for Kafka authentication     |
 | `--kafka-password` | `KAFKA_PASSWORD`   | No      | -       | SASL password for Kafka authentication     |
-| `--org-id`         | `X_ORG_ID`         | When Kafka is configured | - | Authoring org UUID, stamped as the `x-org-id` header on descriptors records |
+| `--org-id`         | `X_ORG_ID`         | No (override) | `orgId:` from `.workbench.yaml` next to the specs | Authoring org UUID, stamped as the `x-org-id` header on descriptors records; some source is required whenever Kafka is configured |
 
 The Kafka producer uses **SASL_SSL** with **SCRAM-SHA-512** and expects a truststore at `~/.kafka/kafka.client.truststore.jks`. If no credentials are provided (broker only), it falls back to PLAINTEXT.
 

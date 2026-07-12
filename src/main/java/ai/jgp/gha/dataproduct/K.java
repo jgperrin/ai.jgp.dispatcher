@@ -5,7 +5,7 @@ package ai.jgp.gha.dataproduct;
  */
 public class K {
 
-    public static final String VERSION = "0.6.4";
+    public static final String VERSION = "0.6.5";
 
     public static final String DEFAULT_CATALOG = "default";
 
@@ -35,6 +35,9 @@ public class K {
     // descriptors record (CC issue #81 header contract). Required whenever
     // Kafka is configured — CC drops header-less records.
     public static final String ENV_ORG_ID = "X_ORG_ID";
+    // Workbench-committed metadata next to the specs; carries `orgId:` (#49).
+    // Flag/env act as overrides — this file is the zero-setup default.
+    public static final String ORG_METADATA_FILE = ".workbench.yaml";
     public static final String KAFKA_HEADER_ORG_ID = "x-org-id";
     public static final String KAFKA_TOPIC_DESCRIPTORS = "controlcenter.dataproduct.descriptors";
     // Per-asset Zeenea sync-status events (#35), consumed by svc (#758).
