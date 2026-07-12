@@ -27,8 +27,9 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Publishes ZIP spec bundles to Kafka using the plain kafka-clients library.
- * Configures SASL_SSL with SCRAM-SHA-512 authentication.
+ * Publishes ODPS specs and sync-status events to Kafka using the plain
+ * kafka-clients library. Configures SASL_SSL with SCRAM-SHA-512
+ * authentication.
  */
 public class KafkaPublisher {
 
@@ -130,18 +131,28 @@ public class KafkaPublisher {
     }
 
     /**
-     * Publishes a ZIP bundle to Kafka as a single binary message.
+     * Publishes one product's ODPS spec to the descriptors topic (#45).
+     * The value is the raw ODPS YAML as UTF-8 bytes — wire-identical to what
+     * the Control Center's {@code StringDeserializer}-based
+     * {@code SpecIngestConsumer} expects — keyed by the ODPS product id and
+     * stamped with the {@link K#KAFKA_HEADER_ORG_ID} header (CC issue #81
+     * header contract: header-less records are dropped to event_log).
      * Blocks until the send completes or fails.
      *
-     * @param topic   the Kafka topic to publish to
-     * @param key     the message key (e.g. ZIP filename)
-     * @param zipData the raw ZIP bytes
+     * @param topic     the Kafka topic to publish to
+     * @param productId the ODPS product id (message key)
+     * @param odpsYaml  the product's ODPS YAML content
+     * @param orgId     the authoring tenant's org UUID (x-org-id header)
      * @return true if published successfully, false otherwise
      */
-    public boolean publishZip(String topic, String key, byte[] zipData) {
-        log.fine("Sending ZIP to topic " + topic + " (key: " + key
-                + ", size: " + zipData.length + " bytes)");
-        return send(topic, key, zipData);
+    public boolean publishSpec(String topic, String productId, String odpsYaml, String orgId) {
+        log.fine("Sending ODPS spec to topic " + topic + " (key: " + productId
+                + ", size: " + odpsYaml.length() + " chars, org: " + orgId + ")");
+        ProducerRecord<String, byte[]> record = new ProducerRecord<>(
+                topic, productId, odpsYaml.getBytes(StandardCharsets.UTF_8));
+        record.headers().add(K.KAFKA_HEADER_ORG_ID,
+                orgId.getBytes(StandardCharsets.UTF_8));
+        return send(record);
     }
 
     /**
@@ -162,10 +173,14 @@ public class KafkaPublisher {
 
     /**
      * Sends a single record and blocks until it completes or fails. Shared by
-     * {@link #publishZip} and {@link #publishStatus}.
+     * {@link #publishSpec} and {@link #publishStatus}.
      */
     private boolean send(String topic, String key, byte[] value) {
-        ProducerRecord<String, byte[]> record = new ProducerRecord<>(topic, key, value);
+        return send(new ProducerRecord<>(topic, key, value));
+    }
+
+    private boolean send(ProducerRecord<String, byte[]> record) {
+        String topic = record.topic();
         try {
             var metadata = producer.send(record).get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
             log.fine("Published to " + metadata.topic()

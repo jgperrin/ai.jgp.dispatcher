@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Timeout;
  * <p>Tests focus on the behaviour we can exercise without a real
  * broker: the constructor's connectivity probe must fail cleanly
  * (returning {@code isConnected() == false}) when the broker is
- * unreachable, {@code publishZip} must return {@code false} in that
+ * unreachable, {@code publishSpec} must return {@code false} in that
  * disconnected state, and {@code close} must be safe to call.
  *
  * <p>The Kafka producer's full SASL_SSL handshake is not exercised
@@ -37,10 +37,12 @@ class KafkaPublisherTest {
 
     @Test
     @Timeout(30)
-    void publishZip_returnsFalse_whenBrokerUnreachable() {
+    void publishSpec_returnsFalse_whenBrokerUnreachable() {
         KafkaPublisher pub = new KafkaPublisher(UNREACHABLE_PLAINTEXT, null, null);
         try {
-            boolean ok = pub.publishZip(K.KAFKA_TOPIC_DESCRIPTORS, "key.zip", new byte[]{1, 2, 3});
+            boolean ok = pub.publishSpec(K.KAFKA_TOPIC_DESCRIPTORS, "my-product",
+                    "id: my-product\nversion: 1.0.0\n",
+                    "3f2b8c1e-9a4d-4e7f-b6a5-1c2d3e4f5a6b");
             assertFalse(ok);
         } finally {
             pub.close();

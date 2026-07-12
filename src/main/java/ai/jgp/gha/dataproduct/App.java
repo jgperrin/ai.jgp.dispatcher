@@ -3,7 +3,6 @@ package ai.jgp.gha.dataproduct;
 import ai.jgp.gha.dataproduct.model.ProductRef;
 import ai.jgp.gha.dataproduct.model.SyncStatusEvent;
 
-import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -82,18 +81,17 @@ public class App {
 
     /**
      * Processes a single product YAML: builds ZIP, uploads to Zeenea,
-     * publishes the spec bundle to Kafka on success, and emits a Zeenea
-     * sync-status event to Kafka on both success and failure (#35).
+     * publishes the product's ODPS spec to Kafka on success (#45), and emits
+     * a Zeenea sync-status event to Kafka on both success and failure (#35).
      */
     private static boolean processProduct(CliConfig config, String productFile) {
         ProductRef ref = ZipBuilder.parseProductRef(productFile);
         boolean success = false;
-        String zipPath = null;
         String uploadId = null;
         String error = null;
         try {
             Path builtZip = ZipBuilder.buildFromProduct(productFile);
-            zipPath = builtZip.toAbsolutePath().toString();
+            String zipPath = builtZip.toAbsolutePath().toString();
             System.out.println();
 
             ZeeneaClient client = new ZeeneaClient(config, zipPath);
@@ -108,23 +106,26 @@ public class App {
             log.log(Level.SEVERE, "Processing failed for " + productFile, e);
         }
 
-        publishToKafka(config, success ? zipPath : null, success, ref, uploadId, error);
+        publishToKafka(config, success ? productFile : null, success, ref, uploadId, error);
         return success;
     }
 
     /**
      * Single file mode: handles a ZIP or .odps.yaml file directly. A product
      * YAML yields a {@link ProductRef} so a sync-status event can be emitted
-     * (#35); a pre-built ZIP carries no ODPS coordinates, so status is skipped
-     * for it (the spec-bundle publish on success is unchanged).
+     * (#35) and its ODPS spec published on success (#45); a pre-built ZIP
+     * carries no ODPS coordinates, so both are skipped for it — the CC only
+     * ingests per-product ODPS YAML, never ZIP bytes.
      */
     private static boolean processSingleFile(CliConfig config) {
         String zipPath = config.getFilePath();
+        String productFile = null;
         ProductRef ref = null;
         if (config.isProductYaml()) {
-            ref = ZipBuilder.parseProductRef(config.getFilePath());
+            productFile = config.getFilePath();
+            ref = ZipBuilder.parseProductRef(productFile);
             try {
-                Path builtZip = ZipBuilder.buildFromProduct(config.getFilePath());
+                Path builtZip = ZipBuilder.buildFromProduct(productFile);
                 zipPath = builtZip.toAbsolutePath().toString();
                 System.out.println();
             } catch (Exception e) {
@@ -141,7 +142,7 @@ public class App {
         String uploadId = client.getLastUploadId();
         String error = success ? null : client.getLastError();
 
-        publishToKafka(config, success ? zipPath : null, success, ref, uploadId, error);
+        publishToKafka(config, success ? productFile : null, success, ref, uploadId, error);
         return success;
     }
 
@@ -149,34 +150,38 @@ public class App {
      * Publishes to Kafka for a single processed asset, using one publisher for
      * both messages:
      * <ul>
-     *   <li>the spec bundle to {@link K#KAFKA_TOPIC_DESCRIPTORS}, only when the
-     *       Zeenea upload succeeded (unchanged behavior);</li>
+     *   <li>the product's ODPS spec (YAML string, key = product id, x-org-id
+     *       header) to {@link K#KAFKA_TOPIC_DESCRIPTORS}, only when the Zeenea
+     *       upload succeeded and the product has an ODPS id (#45);</li>
      *   <li>an append-only sync-status event to {@link K#KAFKA_TOPIC_CATALOG_FEEDBACK}
      *       on <strong>both</strong> success and failure, when the asset has an
      *       ODPS id (#35).</li>
      * </ul>
      * Best-effort: any failure here is logged and swallowed, never altering the
      * process exit code. Skipped entirely when Kafka is not configured, or when
-     * there is nothing to publish (no ZIP and no keyable status event).
+     * there is nothing to publish (no spec and no keyable status event).
      *
-     * @param zipPath        path to the built ZIP to publish, or null to skip the
-     *                       spec-bundle publish (upload failed / no ZIP)
+     * @param productFile    path to the product's ODPS YAML to publish, or null
+     *                       to skip the spec publish (upload failed / raw ZIP)
      * @param uploadSucceeded whether the Zeenea upload succeeded
      * @param ref            the product's id/version, or null (e.g. pre-built ZIP)
      * @param uploadId       the Zeenea upload id, or null
      * @param error          failure reason, or null on success
      */
-    private static void publishToKafka(CliConfig config, String zipPath, boolean uploadSucceeded,
+    private static void publishToKafka(CliConfig config, String productFile, boolean uploadSucceeded,
                                        ProductRef ref, String uploadId, String error) {
         if (!config.isKafkaConfigured()) {
             log.fine("Kafka not configured, skipping Kafka publishing");
             return;
         }
 
-        boolean publishZip = zipPath != null;
+        boolean publishSpec = productFile != null && ref != null && ref.hasId();
+        if (productFile != null && !publishSpec) {
+            System.err.println("  Skipping spec publish: no ODPS id in " + productFile);
+        }
         boolean publishStatus = ref != null && ref.hasId();
-        if (!publishZip && !publishStatus) {
-            log.fine("Nothing to publish to Kafka (no ZIP, no keyable status event)");
+        if (!publishSpec && !publishStatus) {
+            log.fine("Nothing to publish to Kafka (no spec, no keyable status event)");
             return;
         }
 
@@ -195,8 +200,8 @@ public class App {
                 return;
             }
 
-            if (publishZip) {
-                publishZip(publisher, zipPath);
+            if (publishSpec) {
+                publishSpec(publisher, config, ref, productFile);
             }
             if (publishStatus) {
                 publishStatus(publisher, config, ref, uploadSucceeded, uploadId, error);
@@ -211,19 +216,18 @@ public class App {
         }
     }
 
-    /** Reads the built ZIP and publishes it to the descriptors topic. */
-    private static void publishZip(KafkaPublisher publisher, String zipPath) throws java.io.IOException {
-        File zipFile = new File(zipPath);
-        byte[] zipData = Files.readAllBytes(zipFile.toPath());
-        String key = zipFile.getName();
+    /** Reads the product's ODPS YAML and publishes it to the descriptors topic (#45). */
+    private static void publishSpec(KafkaPublisher publisher, CliConfig config, ProductRef ref,
+                                    String productFile) throws java.io.IOException {
+        String odpsYaml = Files.readString(Path.of(productFile));
 
-        log.fine("Read ZIP file: " + key + " (" + zipData.length + " bytes)");
-
-        boolean ok = publisher.publishZip(K.KAFKA_TOPIC_DESCRIPTORS, key, zipData);
+        boolean ok = publisher.publishSpec(
+                K.KAFKA_TOPIC_DESCRIPTORS, ref.id(), odpsYaml, config.getOrgId());
         if (ok) {
-            System.out.println("  Published spec bundle: " + key + " (" + zipData.length + " bytes)");
+            System.out.println("  Published ODPS spec: " + ref.id()
+                    + " v" + ref.version() + " (" + odpsYaml.length() + " chars)");
         } else {
-            System.err.println("  Failed to publish spec bundle to Kafka.");
+            System.err.println("  Failed to publish ODPS spec to Kafka.");
         }
     }
 

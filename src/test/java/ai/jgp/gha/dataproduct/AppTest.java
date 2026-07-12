@@ -137,26 +137,18 @@ class AppTest {
     }
 
     @Test
-    void main_uploadSucceeds_andKafkaConfigured_publishesZip() throws Exception {
-        Path zip = tmp.resolve("bundle.zip");
-        Files.writeString(zip, "zipdata");
-
-        String[] args = {
-                "--file", zip.toString(),
-                "--tenant", "acme",
-                "--api-key", "secret",
-                "--kafka-broker", "127.0.0.1:1",
-        };
-
+    void main_uploadSucceeds_andKafkaConfigured_publishesSpec() throws Exception {
         try (MockedConstruction<ZeeneaClient> zc = mockConstruction(ZeeneaClient.class,
                 (mock, ctx) -> when(mock.upload()).thenReturn(true));
              MockedConstruction<KafkaPublisher> kp = mockConstruction(KafkaPublisher.class,
                      (mock, ctx) -> {
                          when(mock.isConnected()).thenReturn(true);
-                         when(mock.publishZip(anyString(), anyString(), any())).thenReturn(true);
+                         when(mock.publishSpec(anyString(), anyString(), anyString(), anyString()))
+                                 .thenReturn(true);
+                         when(mock.publishStatus(anyString(), anyString())).thenReturn(true);
                      })) {
 
-            int code = SystemStubs.catchSystemExit(() -> App.main(args));
+            int code = SystemStubs.catchSystemExit(() -> App.main(kafkaArgs(productYaml())));
 
             assertEquals(0, code);
             assertEquals(1, kp.constructed().size());
@@ -165,22 +157,12 @@ class AppTest {
 
     @Test
     void main_kafkaPublisherNotConnected_skipsPublishingButExitsZero() throws Exception {
-        Path zip = tmp.resolve("bundle.zip");
-        Files.writeString(zip, "zipdata");
-
-        String[] args = {
-                "--file", zip.toString(),
-                "--tenant", "acme",
-                "--api-key", "secret",
-                "--kafka-broker", "127.0.0.1:1",
-        };
-
         try (MockedConstruction<ZeeneaClient> zc = mockConstruction(ZeeneaClient.class,
                 (mock, ctx) -> when(mock.upload()).thenReturn(true));
              MockedConstruction<KafkaPublisher> kp = mockConstruction(KafkaPublisher.class,
                      (mock, ctx) -> when(mock.isConnected()).thenReturn(false))) {
 
-            int code = SystemStubs.catchSystemExit(() -> App.main(args));
+            int code = SystemStubs.catchSystemExit(() -> App.main(kafkaArgs(productYaml())));
 
             assertEquals(0, code);
         }
@@ -188,26 +170,16 @@ class AppTest {
 
     @Test
     void main_kafkaPublisherThrows_failureIsSwallowed_exitsZero() throws Exception {
-        Path zip = tmp.resolve("bundle.zip");
-        Files.writeString(zip, "zipdata");
-
-        String[] args = {
-                "--file", zip.toString(),
-                "--tenant", "acme",
-                "--api-key", "secret",
-                "--kafka-broker", "127.0.0.1:1",
-        };
-
         try (MockedConstruction<ZeeneaClient> zc = mockConstruction(ZeeneaClient.class,
                 (mock, ctx) -> when(mock.upload()).thenReturn(true));
              MockedConstruction<KafkaPublisher> kp = mockConstruction(KafkaPublisher.class,
                      (mock, ctx) -> {
                          when(mock.isConnected()).thenReturn(true);
-                         when(mock.publishZip(anyString(), anyString(), any()))
+                         when(mock.publishSpec(anyString(), anyString(), anyString(), anyString()))
                                  .thenThrow(new RuntimeException("kafka down"));
                      })) {
 
-            int code = SystemStubs.catchSystemExit(() -> App.main(args));
+            int code = SystemStubs.catchSystemExit(() -> App.main(kafkaArgs(productYaml())));
 
             // Kafka failures don't fail the overall upload.
             assertEquals(0, code);
@@ -215,25 +187,19 @@ class AppTest {
     }
 
     @Test
-    void main_uploadFailsWithKafkaConfigured_doesNotPublish_exitsOne() throws Exception {
+    void main_uploadFailsWithKafkaConfigured_rawZip_doesNotPublish_exitsOne() throws Exception {
         Path zip = tmp.resolve("bundle.zip");
         Files.writeString(zip, "x");
-
-        String[] args = {
-                "--file", zip.toString(),
-                "--tenant", "acme",
-                "--api-key", "secret",
-                "--kafka-broker", "127.0.0.1:1",
-        };
 
         try (MockedConstruction<ZeeneaClient> zc = mockConstruction(ZeeneaClient.class,
                 (mock, ctx) -> when(mock.upload()).thenReturn(false));
              MockedConstruction<KafkaPublisher> kp = mockConstruction(KafkaPublisher.class)) {
 
-            int code = SystemStubs.catchSystemExit(() -> App.main(args));
+            int code = SystemStubs.catchSystemExit(() -> App.main(kafkaArgs(zip)));
 
             assertEquals(1, code);
-            // Kafka must not be constructed when Zeenea upload failed.
+            // Kafka must not be constructed: upload failed and a raw ZIP has
+            // no ODPS coordinates for a status event either.
             assertEquals(0, kp.constructed().size());
         }
     }
@@ -343,17 +309,20 @@ class AppTest {
         return yaml;
     }
 
+    private static final String ORG_ID = "3f2b8c1e-9a4d-4e7f-b6a5-1c2d3e4f5a6b";
+
     private String[] kafkaArgs(Path file) {
         return new String[]{
                 "--file", file.toString(),
                 "--tenant", "acme",
                 "--api-key", "secret",
                 "--kafka-broker", "127.0.0.1:1",
+                "--org-id", ORG_ID,
         };
     }
 
     @Test
-    void main_productYaml_uploadSucceeds_publishesZipAndStatusEvent() throws Exception {
+    void main_productYaml_uploadSucceeds_publishesSpecAndStatusEvent() throws Exception {
         try (MockedConstruction<ZeeneaClient> zc = mockConstruction(ZeeneaClient.class,
                 (mock, ctx) -> {
                     when(mock.upload()).thenReturn(true);
@@ -362,7 +331,8 @@ class AppTest {
              MockedConstruction<KafkaPublisher> kp = mockConstruction(KafkaPublisher.class,
                      (mock, ctx) -> {
                          when(mock.isConnected()).thenReturn(true);
-                         when(mock.publishZip(anyString(), anyString(), any())).thenReturn(true);
+                         when(mock.publishSpec(anyString(), anyString(), anyString(), anyString()))
+                                 .thenReturn(true);
                          when(mock.publishStatus(anyString(), anyString())).thenReturn(true);
                      })) {
 
@@ -372,8 +342,13 @@ class AppTest {
             assertEquals(1, kp.constructed().size());
             KafkaPublisher pub = kp.constructed().get(0);
 
-            // Spec bundle published to the ingest topic on success.
-            verify(pub).publishZip(eq(K.KAFKA_TOPIC_DESCRIPTORS), anyString(), any());
+            // ODPS spec published to the descriptors topic on success (#45):
+            // key = product id, value = the YAML content, org id forwarded.
+            ArgumentCaptor<String> yaml = ArgumentCaptor.forClass(String.class);
+            verify(pub).publishSpec(eq(K.KAFKA_TOPIC_DESCRIPTORS), eq("my-product"),
+                    yaml.capture(), eq(ORG_ID));
+            assertTrue(yaml.getValue().contains("id: my-product"), yaml.getValue());
+            assertTrue(yaml.getValue().contains("version: 1.2.3"), yaml.getValue());
 
             // Status event keyed by <id>:<version>, marked success, with uploadId.
             ArgumentCaptor<String> key = ArgumentCaptor.forClass(String.class);
@@ -410,8 +385,8 @@ class AppTest {
             verify(pub).publishStatus(eq("my-product:1.2.3"), json.capture());
             assertTrue(json.getValue().contains("\"status\":\"fail\""), json.getValue());
             assertTrue(json.getValue().contains("SignatureDoesNotMatch"), json.getValue());
-            // ...but the spec bundle is NOT published when the upload failed.
-            verify(pub, never()).publishZip(anyString(), anyString(), any());
+            // ...but the ODPS spec is NOT published when the upload failed.
+            verify(pub, never()).publishSpec(anyString(), anyString(), anyString(), anyString());
         }
     }
 
@@ -422,7 +397,8 @@ class AppTest {
              MockedConstruction<KafkaPublisher> kp = mockConstruction(KafkaPublisher.class,
                      (mock, ctx) -> {
                          when(mock.isConnected()).thenReturn(true);
-                         when(mock.publishZip(anyString(), anyString(), any())).thenReturn(true);
+                         when(mock.publishSpec(anyString(), anyString(), anyString(), anyString()))
+                                 .thenReturn(true);
                          when(mock.publishStatus(anyString(), anyString()))
                                  .thenThrow(new RuntimeException("kafka down"));
                      })) {
@@ -435,25 +411,21 @@ class AppTest {
     }
 
     @Test
-    void main_rawZip_uploadSucceeds_publishesZip_butNoStatusEvent() throws Exception {
+    void main_rawZip_uploadSucceeds_publishesNothingToKafka() throws Exception {
         Path zip = tmp.resolve("bundle.zip");
         Files.writeString(zip, "zipdata");
 
         try (MockedConstruction<ZeeneaClient> zc = mockConstruction(ZeeneaClient.class,
                 (mock, ctx) -> when(mock.upload()).thenReturn(true));
-             MockedConstruction<KafkaPublisher> kp = mockConstruction(KafkaPublisher.class,
-                     (mock, ctx) -> {
-                         when(mock.isConnected()).thenReturn(true);
-                         when(mock.publishZip(anyString(), anyString(), any())).thenReturn(true);
-                     })) {
+             MockedConstruction<KafkaPublisher> kp = mockConstruction(KafkaPublisher.class)) {
 
             int code = SystemStubs.catchSystemExit(() -> App.main(kafkaArgs(zip)));
 
             assertEquals(0, code);
-            KafkaPublisher pub = kp.constructed().get(0);
-            // A pre-built ZIP carries no ODPS coordinates → no status event.
-            verify(pub).publishZip(eq(K.KAFKA_TOPIC_DESCRIPTORS), anyString(), any());
-            verify(pub, never()).publishStatus(anyString(), anyString());
+            // A pre-built ZIP carries no ODPS coordinates: no spec publish
+            // (the CC only ingests per-product ODPS YAML, #45) and no status
+            // event — the publisher is never even constructed.
+            assertEquals(0, kp.constructed().size());
         }
     }
 }

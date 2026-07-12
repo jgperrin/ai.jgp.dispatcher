@@ -10,7 +10,7 @@ The uploader takes a ZIP file containing `.odps.yaml` and `.odcs.yaml` descripto
 2. **Upload** the ZIP file to the provided S3 URL
 3. **Trigger** processing for the target catalog
 4. **Poll** until processing completes and report the results
-5. **Publish to Kafka** (optional) — the entire spec ZIP is published as a single binary message to the `controlcenter.dataproduct.descriptors` topic
+5. **Publish to Kafka** (optional) — each changed product's ODPS YAML is published to the `controlcenter.dataproduct.descriptors` topic, keyed by product id with the `x-org-id` header
 
 Steps 1–4 upload to Zeenea. Step 5 runs only when Kafka is configured and the Zeenea upload succeeds.
 
@@ -50,9 +50,9 @@ For each changed product, `ZipBuilder.buildFromProduct()` creates a versioned ZI
 
 `ZeeneaClient` requests an upload URL (`POST /api/synchronization/data-product-uploads`), `PUT`s the ZIP to the returned S3 presigned URL, triggers processing for the target catalog, and polls `GET …/{uploadId}` every 2 seconds (up to 60 retries) until the status is `Processed` or `Failed`.
 
-### Stage 6: Publish ZIP to Kafka (optional)
+### Stage 6: Publish the ODPS spec to Kafka (optional)
 
-If Kafka credentials are configured, `KafkaPublisher.publishZip()` sends the **entire ZIP as a single binary message** to the `controlcenter.dataproduct.descriptors` topic, keyed by the ZIP filename. The Control Center extracts the specs and advances the data products to `SPEC_READY`. If the broker is unreachable, this step is skipped with a warning — the Zeenea upload still counts as success.
+If Kafka credentials are configured, `KafkaPublisher.publishSpec()` sends the **product's ODPS YAML as a UTF-8 string** to the `controlcenter.dataproduct.descriptors` topic, keyed by the ODPS product id and stamped with the `x-org-id` header (the authoring tenant's org UUID, from `X_ORG_ID` — required whenever Kafka is configured; the run fails closed without it). This matches the Control Center's `SpecIngestConsumer` contract, which upserts the catalog and drops header-less records. If the broker is unreachable, this step is skipped with a warning — the Zeenea upload still counts as success.
 
 ### Process diagram
 
@@ -131,7 +131,8 @@ java -jar target/data-product-uploader-0.3.3.jar \
   --api-key YOUR_API_KEY \
   --kafka-broker api.jgp.ai:9093 \
   --kafka-user YOUR_KAFKA_USER \
-  --kafka-password YOUR_KAFKA_PASSWORD
+  --kafka-password YOUR_KAFKA_PASSWORD \
+  --org-id YOUR_ORG_UUID
 ```
 
 Or use the convenience wrapper (auto-builds if needed):
@@ -163,6 +164,7 @@ When configured, the uploader publishes each YAML spec from the ZIP to the `cont
 | `--kafka-broker`   | `KAFKA_BROKER_URL` | No      | -       | Kafka broker URL (e.g. `api.jgp.ai:9093`)  |
 | `--kafka-user`     | `KAFKA_USERNAME`   | No      | -       | SASL username for Kafka authentication     |
 | `--kafka-password` | `KAFKA_PASSWORD`   | No      | -       | SASL password for Kafka authentication     |
+| `--org-id`         | `X_ORG_ID`         | When Kafka is configured | - | Authoring org UUID, stamped as the `x-org-id` header on descriptors records |
 
 The Kafka producer uses **SASL_SSL** with **SCRAM-SHA-512** and expects a truststore at `~/.kafka/kafka.client.truststore.jks`. If no credentials are provided (broker only), it falls back to PLAINTEXT.
 
