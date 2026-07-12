@@ -16,9 +16,9 @@
     },
     "apiVersion": {
       "type": "string",
-      "default": "v3.0.2",
-      "description": "Version of the standard used to build data contract. Default value is v3.0.2.",
-      "enum": ["v3.0.2","v3.0.1", "v3.0.0", "v2.2.2", "v2.2.1", "v2.2.0"]
+      "default": "v3.2.0",
+      "description": "Version of the standard used to build data contract. Default value is v3.2.0.",
+      "enum": ["v3.2.0", "v3.1.0", "v3.0.2", "v3.0.1", "v3.0.0", "v2.2.2", "v2.2.1", "v2.2.0"]
     },
     "id": {
       "type": "string",
@@ -51,7 +51,8 @@
     },
     "dataProduct": {
       "type": "string",
-      "description": "The name of the data product."
+      "description": "The name of the data product. DEPRECATED since v3.1.0.",
+      "deprecated": true
     },
     "description": {
       "type": "object",
@@ -82,6 +83,9 @@
       "description": "Name of the logical data domain.",
       "examples": ["imdb_ds_aggregate", "receiver_profile_out", "transaction_profile_out"]
     },
+    "context": {
+      "$ref": "#/$defs/Context"
+    },
     "schema": {
       "type": "array",
       "description": "A list of elements within the schema to be cataloged.",
@@ -96,10 +100,20 @@
       "$ref": "#/$defs/Pricing"
     },
     "team": {
-      "type": "array",
-      "items": {
-        "$ref": "#/$defs/Team"
-      }
+      "oneOf": [
+        {
+          "$ref": "#/$defs/Team",
+          "description": "Team information object with members array (v3.1.0+)."
+        },
+        {
+          "type": "array",
+          "description": "DEPRECATED: Array of team members. Use the Team object structure instead. This array format is maintained for backward compatibility with v3.0.2 and earlier versions and will be removed in ODCS 4.0.",
+          "deprecated": true,
+          "items": {
+            "$ref": "#/$defs/TeamMember"
+          }
+        }
+      ]
     },
     "roles": {
       "type": "array",
@@ -110,7 +124,8 @@
     },
     "slaDefaultElement": {
       "type": "string",
-      "description": "Element (using the element path notation) to do the checks on."
+      "description": "DEPRECATED SINCE 3.1. WILL BE REMOVED IN ODCS 4.0. Element (using the element path notation) to do the checks on.",
+      "deprecated": true
     },
     "slaProperties": {
       "type": "array",
@@ -131,13 +146,84 @@
       "description": "Timestamp in UTC of when the data contract was created."
     }
   },
-  "required": ["version", "apiVersion", "kind", "id", "status"],
+  "required": ["version", "apiVersion", "kind", "id"],
   "additionalProperties": false,
+  "unevaluatedProperties": false,
   "$defs": {
+    "Context": {
+      "description": "AI and semantic context block (RFC-0038). Structured guidance for AI agents, LLMs, BI tools, and semantic layer platforms. Optional and additive.",
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Shorthand: equivalent to providing instructions only."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "instructions": {
+              "type": "string",
+              "description": "Natural language guidance for AI agents and tools on how to use this entity. Equivalent to a system prompt scoped to this level."
+            },
+            "verifiedStatements": {
+              "type": "array",
+              "description": "Canonical questions (entries without `answer`) and verified Q&A pairs (entries with `answer`).",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": { "type": "string", "description": "Stable identifier for the entry." },
+                  "question": { "type": "string", "description": "The canonical question." },
+                  "answer": { "type": "string", "description": "The expected response or result description." },
+                  "authoritativeDefinitions": { "$ref": "#/$defs/AuthoritativeDefinitions" },
+                  "tags": { "type": "array", "items": { "type": "string" } },
+                  "customProperties": { "$ref": "#/$defs/CustomProperties" }
+                },
+                "required": ["question"],
+                "additionalProperties": false
+              }
+            },
+            "constraints": {
+              "type": "array",
+              "description": "Negative guidance: what AI agents must NOT do with this entity.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": { "type": "string", "description": "Stable identifier for the constraint." },
+                  "constraint": { "type": "string", "description": "The constraint text (negative guidance for AI agents)." },
+                  "authoritativeDefinitions": { "$ref": "#/$defs/AuthoritativeDefinitions" },
+                  "tags": { "type": "array", "items": { "type": "string" } },
+                  "customProperties": { "$ref": "#/$defs/CustomProperties" }
+                },
+                "required": ["constraint"],
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "ShorthandReference": {
+      "type": "string",
+      "description": "Shorthand notation using name fields (table_name.column_name)",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+$"
+    },
+    "FullyQualifiedReference": {
+      "type": "string",
+      "description": "Fully qualified notation using id fields (section/id/properties/id), optionally prefixed with external file reference",
+      "pattern": "^(?:(?:https?:\\/\\/)?[A-Za-z0-9._\\-\\/]+\\.ya?ml#)?\\/?[A-Za-z_][A-Za-z0-9_]*\\/[A-Za-z0-9_-]+(?:\\/[A-Za-z_][A-Za-z0-9_]*\\/[A-Za-z0-9_-]+)*$"
+    },
+    "StableId": {
+      "type": "string",
+      "description": "Stable technical identifier for references. Must be unique within its containing array. Cannot contain special characters ('-', '_' allowed).",
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
     "Server": {
       "type": "object",
       "description": "Data source details of where data is physically stored.",
       "properties": {
+        "id": {
+          "$ref": "#/$defs/StableId"
+        },
         "server": {
           "type": "string",
           "description": "Identifier of the server."
@@ -147,9 +233,9 @@
           "description": "Type of the server.",
           "enum": [
             "api", "athena", "azure", "bigquery", "clickhouse", "databricks", "denodo", "dremio",
-            "duckdb", "glue", "cloudsql", "db2", "informix", "kafka", "kinesis", "local",
+            "duckdb", "glue", "hana", "cloudsql", "db2", "hive", "impala", "informix", "kafka", "kinesis", "local",
             "mysql", "oracle", "postgresql", "postgres", "presto", "pubsub",
-            "redshift", "s3", "sftp", "snowflake", "sqlserver", "synapse", "trino", "vertica", "custom"
+            "redshift", "s3", "sftp", "snowflake", "sqlserver", "synapse", "trino", "vertica", "zen", "custom"
           ]
         },
         "description": {
@@ -333,6 +419,32 @@
           "if": {
             "properties": {
               "type": {
+                "const": "hive"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "$ref": "#/$defs/ServerSource/HiveServer"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "impala"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "$ref": "#/$defs/ServerSource/ImpalaServer"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
                 "const": "informix"
               }
             },
@@ -342,7 +454,19 @@
             "$ref": "#/$defs/ServerSource/InformixServer"
           }
         },
-
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "zen"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "$ref": "#/$defs/ServerSource/ZenServer"
+          }
+        },
         {
           "if": {
             "properties": {
@@ -419,6 +543,19 @@
           },
           "then": {
             "$ref": "#/$defs/ServerSource/OracleServer"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "hana"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "$ref": "#/$defs/ServerSource/HanaServer"
           }
         },
         {
@@ -578,7 +715,8 @@
           }
         }
       ],
-      "required": ["server", "type"]
+      "required": ["server", "type"],
+      "unevaluatedProperties": false
     },
     "ServerSource": {
       "ApiServer": {
@@ -623,10 +761,14 @@
             "type": "string",
             "description": "The region your AWS account uses.",
             "examples": ["eu-west-1"]
+          },
+          "workgroup": {
+            "type": "string",
+            "description": "The Athena workgroup to use. Workgroups can enforce query result location and other client-side settings via the 'Override client-side settings' option.",
+            "examples": ["primary"]
           }
         },
         "required": [
-          "stagingDir",
           "schema"
         ]
       },
@@ -645,7 +787,7 @@
           },
           "format": {
             "type": "string",
-            "enum": [
+            "examples": [
               "parquet",
               "delta",
               "json",
@@ -653,9 +795,19 @@
             ],
             "description": "File format."
           },
+          "encoding": {
+            "type": "string",
+            "description": "The expected character encoding for data payloads exposed through this server, for example UTF-8, ISO-8859-1, ASCII or UTF-16.",
+            "examples": [
+              "UTF-8",
+              "ISO-8859-1",
+              "ASCII",
+              "UTF-16"
+            ]
+          },
           "delimiter": {
             "type": "string",
-            "enum": [
+            "examples": [
               "new_line",
               "array"
             ],
@@ -786,7 +938,7 @@
             "description": "Path to duckdb database file."
           },
           "schema": {
-            "type": "integer",
+            "type": "string",
             "description": "The name of the schema."
           }
         },
@@ -828,6 +980,16 @@
               "csv",
               "json",
               "delta"
+            ]
+          },
+          "encoding": {
+            "type": "string",
+            "description": "The expected character encoding for data payloads exposed through this server, for example UTF-8, ISO-8859-1, ASCII or UTF-16.",
+            "examples": [
+              "UTF-8",
+              "ISO-8859-1",
+              "ASCII",
+              "UTF-16"
             ]
           }
         },
@@ -891,6 +1053,50 @@
           "database"
         ]
       },
+      "HiveServer": {
+        "type": "object",
+        "title": "HiveServer",
+        "properties": {
+          "host": {
+            "type": "string",
+            "description": "The host to the Hive server. "
+          },
+          "port": {
+            "type": "integer",
+            "description": "The port to the Hive server. Defaults to 10000."
+          },
+          "database": {
+            "type": "string",
+            "description": "The name of the Hive database."
+          }
+        },
+        "required": [
+          "host",
+          "database"
+        ]
+      },
+      "ImpalaServer": {
+        "type": "object",
+        "title": "ImpalaServer",
+        "properties": {
+          "host": {
+            "type": "string",
+            "description": "The host to the Impala server."
+          },
+          "port": {
+            "type": "integer",
+            "description": "The port to the Impala server. Defaults to 21050."
+          },
+          "database": {
+            "type": "string",
+            "description": "The name of the Impala database."
+          }
+        },
+        "required": [
+          "host",
+          "database"
+        ]
+      },
       "InformixServer": {
         "type": "object",
         "title": "InformixServer",
@@ -912,6 +1118,25 @@
           "host",
           "database"
         ]
+      },
+      "ZenServer": {
+        "type": "object",
+        "title": "ZenServer",
+        "properties": {
+          "host": {
+            "type": "string",
+            "description": "Hostname or IP address of the Zen server."
+          },
+          "port": {
+            "type": "integer",
+            "description": "Zen server SQL connections port. Defaults to 1583."
+          },
+          "database": {
+            "type": "string",
+            "description": "Database name to connect to on the Zen server."
+          }
+        },
+        "required": ["host", "database"]
       },
       "CustomServer": {
         "type": "object",
@@ -945,6 +1170,16 @@
           "format": {
             "type": "string",
             "description": "File format."
+          },
+          "encoding": {
+            "type": "string",
+            "description": "The expected character encoding for data payloads exposed through this server, for example UTF-8, ISO-8859-1, ASCII or UTF-16.",
+            "examples": [
+              "UTF-8",
+              "ISO-8859-1",
+              "ASCII",
+              "UTF-16"
+            ]
           },
           "host": {
             "type": "string",
@@ -990,6 +1225,10 @@
           "warehouse": {
             "type": "string",
             "description": "Name of the cluster or warehouse."
+          },
+          "stream": {
+            "type": "string",
+            "description": "Name of the data stream."
           }
         }
       },
@@ -1007,6 +1246,16 @@
             "description": "The format of the messages.",
             "examples": ["json", "avro", "protobuf", "xml"],
             "default": "json"
+          },
+          "encoding": {
+            "type": "string",
+            "description": "The expected character encoding for data payloads exposed through this server, for example UTF-8, ISO-8859-1, ASCII or UTF-16.",
+            "examples": [
+              "UTF-8",
+              "ISO-8859-1",
+              "ASCII",
+              "UTF-16"
+            ]
           }
         },
         "required": [
@@ -1033,6 +1282,16 @@
               "avro",
               "protobuf"
             ]
+          },
+          "encoding": {
+            "type": "string",
+            "description": "The expected character encoding for data payloads exposed through this server, for example UTF-8, ISO-8859-1, ASCII or UTF-16.",
+            "examples": [
+              "UTF-8",
+              "ISO-8859-1",
+              "ASCII",
+              "UTF-16"
+            ]
           }
         }
       },
@@ -1056,6 +1315,16 @@
               "parquet",
               "delta",
               "csv"
+            ]
+          },
+          "encoding": {
+            "type": "string",
+            "description": "The expected character encoding for data payloads exposed through this server, for example UTF-8, ISO-8859-1, ASCII or UTF-16.",
+            "examples": [
+              "UTF-8",
+              "ISO-8859-1",
+              "ASCII",
+              "UTF-16"
             ]
           }
         },
@@ -1145,6 +1414,31 @@
           "port",
           "database",
           "schema"
+        ]
+      },
+      "HanaServer": {
+        "type": "object",
+        "title": "HanaServer",
+        "properties": {
+          "host": {
+            "type": "string",
+            "description": "Host of the HANA server."
+          },
+          "port": {
+            "type": "integer",
+            "description": "Port of the HANA server."
+          },
+          "database": {
+            "type": "string",
+            "description": "Name of the database (tenant)."
+          },
+          "schema": {
+            "type": "string",
+            "description": "Name of the schema."
+          }
+        },
+        "required": [
+          "host"
         ]
       },
       "PrestoServer": {
@@ -1241,7 +1535,7 @@
           },
           "format": {
             "type": "string",
-            "enum": [
+            "examples": [
               "parquet",
               "delta",
               "json",
@@ -1249,9 +1543,19 @@
             ],
             "description": "File format."
           },
+          "encoding": {
+            "type": "string",
+            "description": "The expected character encoding for data payloads exposed through this server, for example UTF-8, ISO-8859-1, ASCII or UTF-16.",
+            "examples": [
+              "UTF-8",
+              "ISO-8859-1",
+              "ASCII",
+              "UTF-16"
+            ]
+          },
           "delimiter": {
             "type": "string",
-            "enum": [
+            "examples": [
               "new_line",
               "array"
             ],
@@ -1277,7 +1581,7 @@
           },
           "format": {
             "type": "string",
-            "enum": [
+            "examples": [
               "parquet",
               "delta",
               "json",
@@ -1285,9 +1589,19 @@
             ],
             "description": "File format."
           },
+          "encoding": {
+            "type": "string",
+            "description": "The expected character encoding for data payloads exposed through this server, for example UTF-8, ISO-8859-1, ASCII or UTF-16.",
+            "examples": [
+              "UTF-8",
+              "ISO-8859-1",
+              "ASCII",
+              "UTF-16"
+            ]
+          },
           "delimiter": {
             "type": "string",
-            "enum": [
+            "examples": [
               "new_line",
               "array"
             ],
@@ -1465,6 +1779,9 @@
     "SchemaElement": {
       "type": "object",
       "properties": {
+        "id": {
+          "$ref": "#/$defs/StableId"
+        },
         "name": {
           "type": "string",
           "description": "Name of the element."
@@ -1481,6 +1798,14 @@
         "businessName": {
           "type": "string",
           "description": "The business name of the element."
+        },
+        "deprecated": {
+          "type": "boolean",
+          "description": "Indicates this element is deprecated and should not be used in new implementations. Defaults to false.",
+          "default": false
+        },
+        "synonyms": {
+          "$ref": "#/$defs/Synonyms"
         },
         "authoritativeDefinitions": {
           "$ref": "#/$defs/AuthoritativeDefinitions"
@@ -1518,8 +1843,18 @@
             "$ref": "#/$defs/SchemaProperty"
           }
         },
+        "relationships": {
+          "type": "array",
+          "description": "A list of relationships to other properties. Each relationship must have 'from', 'to' and optionally 'type' field.",
+          "items": {
+            "$ref": "#/$defs/RelationshipSchemaLevel"
+          }
+        },
         "quality": {
           "$ref": "#/$defs/DataQualityChecks"
+        },
+        "context": {
+          "$ref": "#/$defs/Context"
         }
       },
       "allOf": [
@@ -1545,7 +1880,7 @@
         "logicalType": {
           "type": "string",
           "description": "The logical element data type.",
-          "enum": ["string", "date", "number", "integer", "object", "array", "boolean"]
+          "enum": ["string", "date", "timestamp", "time", "number", "integer", "object", "array", "boolean", "map", "vector"]
         },
         "logicalTypeOptions": {
           "type": "object",
@@ -1569,6 +1904,12 @@
           "type": "boolean",
           "default": false,
           "description": "Indicates if the element contains unique values; possible values are true and false. Default is false."
+        },
+        "semanticType": {
+          "type": "string",
+          "enum": ["column", "measure", "dimension"],
+          "default": "column",
+          "description": "The semantic role the property plays in the data model. `column` (the default) is a physical column in the underlying data store; `measure` is an aggregated value (e.g., `SUM(revenue)`) whose aggregation expression is held in `transformLogic`; `dimension` is a categorical attribute used for grouping and filtering. See RFC 0034."
         },
         "partitioned": {
           "type": "boolean",
@@ -1611,10 +1952,26 @@
             "$ref": "#/$defs/AnyType"
           }
         },
+        "enum": {
+          "type": "array",
+          "description": "Enumeration of allowed values for this property. Each entry is an object with at least a `value`. See RFC 0033.",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/EnumValue"
+          }
+        },
         "criticalDataElement": {
           "type": "boolean",
           "default": false,
           "description": "True or false indicator; If element is considered a critical data element (CDE) then true else false."
+        },
+        "relationships": {
+          "type": "array",
+          "description": "A list of relationships to other properties. When defined at property level, the 'from' field is implicit and should not be specified.",
+          "items": {
+            "$ref": "#/$defs/RelationshipPropertyLevel"
+          }
         },
         "quality": {
           "$ref": "#/$defs/DataQualityChecks"
@@ -1636,6 +1993,7 @@
             "properties": {
               "logicalTypeOptions": {
                 "type": "object",
+                "additionalProperties": false,
                 "properties": {
                   "minLength": {
                     "type": "integer",
@@ -1656,8 +2014,7 @@
                     "examples": ["password", "byte", "binary", "email", "uuid", "uri", "hostname", "ipv4", "ipv6"],
                     "description": "Provides extra context about what format the string follows."
                   }
-                },
-                "additionalProperties": false
+                }
               }
             }
           }
@@ -1674,6 +2031,7 @@
             "properties": {
               "logicalTypeOptions": {
                 "type": "object",
+                "additionalProperties": false,
                 "properties": {
                   "format": {
                     "type": "string",
@@ -1681,25 +2039,82 @@
                     "description": "Format of the date. Follows the format as prescribed by [JDK DateTimeFormatter](https://docs.oracle.com/javase/8/docs/api/java/time/format/DateTimeFormatter.html). For example, format 'yyyy-MM-dd'."
                   },
                   "exclusiveMaximum": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "If set to true, all values are strictly less than the maximum value (values < maximum). Otherwise, less than or equal to the maximum value (values <= maximum)."
+                    "type": "string",
+                    "description": "All values must be strictly less than this value (values < exclusiveMaximum)."
                   },
                   "maximum": {
                     "type": "string",
                     "description": "All date values are less than or equal to this value (values <= maximum)."
                   },
                   "exclusiveMinimum": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "If set to true, all values are strictly greater than the minimum value (values > minimum). Otherwise, greater than or equal to the minimum value (values >= minimum)."
+                    "type": "string",
+                    "description": "All values must be strictly greater than this value (values > exclusiveMinimum)."
                   },
                   "minimum": {
                     "type": "string",
                     "description": "All date values are greater than or equal to this value (values >= minimum)."
                   }
-                },
-                "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "anyOf": [
+              {
+                "properties": {
+                  "logicalType": {
+                    "const": "timestamp"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "logicalType": {
+                    "const": "time"
+                  }
+                }
+              }
+            ]
+          },
+          "then": {
+            "properties": {
+              "logicalTypeOptions": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "format": {
+                    "type": "string",
+                    "examples": ["yyyy-MM-dd", "yyyy-MM-dd HH:mm:ss", "HH:mm:ss"],
+                    "description": "Format of the date. Follows the format as prescribed by [JDK DateTimeFormatter](https://docs.oracle.com/javase/8/docs/api/java/time/format/DateTimeFormatter.html). For example, format 'yyyy-MM-dd'."
+                  },
+                  "exclusiveMaximum": {
+                    "type": "string",
+                    "description": "All values must be strictly less than this value (values < exclusiveMaximum)."
+                  },
+                  "maximum": {
+                    "type": "string",
+                    "description": "All date values are less than or equal to this value (values <= maximum)."
+                  },
+                  "exclusiveMinimum": {
+                    "type": "string",
+                    "description": "All values must be strictly greater than this value (values > exclusiveMinimum)."
+                  },
+                  "minimum": {
+                    "type": "string",
+                    "description": "All date values are greater than or equal to this value (values >= minimum)."
+                  },
+                  "timezone": {
+                    "type": "boolean",
+                    "description": "Whether the timestamp defines the timezone or not. If true, timezone information is included in the timestamp."
+                  },
+                  "defaultTimezone": {
+                    "type": "string",
+                    "description": "The default timezone of the timestamp. If timezone is not defined, the default timezone UTC is used.",
+                    "default": "Etc/UTC"
+                  }
+                }
               }
             }
           }
@@ -1720,6 +2135,7 @@
             "properties": {
               "logicalTypeOptions": {
                 "type": "object",
+                "additionalProperties": false,
                 "properties": {
                   "multipleOf": {
                     "type": "number",
@@ -1731,18 +2147,16 @@
                     "description": "All values are less than or equal to this value (values <= maximum)."
                   },
                   "exclusiveMaximum": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "If set to true, all values are strictly less than the maximum value (values < maximum). Otherwise, less than or equal to the maximum value (values <= maximum)."
+                    "type": "number",
+                    "description": "All values must be strictly less than this value (values < exclusiveMaximum)."
                   },
                   "minimum": {
                     "type": "number",
                     "description": "All values are greater than or equal to this value (values >= minimum)."
                   },
                   "exclusiveMinimum": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "If set to true, all values are strictly greater than the minimum value (values > minimum). Otherwise, greater than or equal to the minimum value (values >= minimum)."
+                    "type": "number",
+                    "description": "All values must be strictly greater than this value (values > exclusiveMinimum)."
                   },
                   "format": {
                     "type": "string",
@@ -1750,8 +2164,7 @@
                     "description": "Format of the value in terms of how many bits of space it can use and whether it is signed or unsigned (follows the Rust integer types).",
                     "enum": ["i8", "i16", "i32", "i64", "i128", "u8", "u16", "u32", "u64", "u128"]
                   }
-                },
-                "additionalProperties": false
+                }
               }
             }
           }
@@ -1772,6 +2185,7 @@
             "properties": {
               "logicalTypeOptions": {
                 "type": "object",
+                "additionalProperties": false,
                 "properties": {
                   "multipleOf": {
                     "type": "number",
@@ -1783,18 +2197,16 @@
                     "description": "All values are less than or equal to this value (values <= maximum)."
                   },
                   "exclusiveMaximum": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "If set to true, all values are strictly less than the maximum value (values < maximum). Otherwise, less than or equal to the maximum value (values <= maximum)."
+                    "type": "number",
+                    "description": "All values must be strictly less than this value (values < exclusiveMaximum)."
                   },
                   "minimum": {
                     "type": "number",
                     "description": "All values are greater than or equal to this value (values >= minimum)."
                   },
                   "exclusiveMinimum": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "If set to true, all values are strictly greater than the minimum value (values > minimum). Otherwise, greater than or equal to the minimum value (values >= minimum)."
+                    "type": "number",
+                    "description": "All values must be strictly greater than this value (values > exclusiveMinimum)."
                   },
                   "format": {
                     "type": "string",
@@ -1802,8 +2214,7 @@
                     "description": "Format of the value in terms of how many bits of space it can use (follows the Rust float types).",
                     "enum": ["f32", "f64"]
                   }
-                },
-                "additionalProperties": false
+                }
               }
             }
           }
@@ -1820,6 +2231,7 @@
             "properties": {
               "logicalTypeOptions": {
                 "type": "object",
+                "additionalProperties": false,
                 "properties": {
                   "maxProperties": {
                     "type": "integer",
@@ -1841,8 +2253,7 @@
                     "uniqueItems": true,
                     "description": "Property names that are required to exist in the object."
                   }
-                },
-                "additionalProperties": false
+                }
               },
               "properties": {
                 "type": "array",
@@ -1866,6 +2277,7 @@
             "properties": {
               "logicalTypeOptions": {
                 "type": "object",
+                "additionalProperties": false,
                 "properties": {
                   "maxItems": {
                     "type": "integer",
@@ -1883,8 +2295,7 @@
                     "default": false,
                     "description": "If set to true, all items in the array are unique."
                   }
-                },
-                "additionalProperties": false
+                }
               },
               "items": {
                 "$ref": "#/$defs/SchemaItemProperty",
@@ -1892,8 +2303,90 @@
               }
             }
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "logicalType": {
+                "const": "map"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "map": {
+                "type": "object",
+                "description": "Key/value definition for a map (only applicable when `logicalType: map`). See RFC 0030.",
+                "additionalProperties": false,
+                "properties": {
+                  "key": {
+                    "$ref": "#/$defs/SchemaItemProperty",
+                    "description": "Definition of the map's key."
+                  },
+                  "value": {
+                    "$ref": "#/$defs/SchemaItemProperty",
+                    "description": "Definition of the map's value."
+                  }
+                },
+                "required": ["key", "value"]
+              }
+            },
+            "required": ["map"]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "logicalType": {
+                "const": "vector"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "logicalTypeOptions": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "dimensions": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The fixed length of the vector. Positive integer (only applicable when `logicalType: vector`). See RFC 0042.",
+                    "examples": [384, 768, 1024, 1536, 3072]
+                  },
+                  "elementType": {
+                    "type": "string",
+                    "enum": ["bfloat16", "binary", "float16", "float32", "float64", "int8", "uint8"],
+                    "default": "float32",
+                    "description": "Numeric type of each vector element. `binary` means each element is one bit (binary-quantized vectors)."
+                  },
+                  "distanceMetric": {
+                    "type": "string",
+                    "enum": ["cosine", "dotProduct", "euclidean", "hamming", "manhattan"],
+                    "description": "Intended similarity metric. Advisory \u2014 the physical index may differ."
+                  },
+                  "embeddingModel": {
+                    "type": "string",
+                    "description": "Identifier of the model used to produce the vectors.",
+                    "examples": ["openai/text-embedding-3-small", "cohere/embed-english-v3.0"]
+                  },
+                  "embeddingModelVersion": {
+                    "type": "string",
+                    "description": "Version or revision of the embedding model, when the model identifier does not already carry one."
+                  },
+                  "normalized": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "True if vectors are L2-normalized before storage, which makes cosine and dotProduct equivalent."
+                  }
+                },
+                "required": ["dimensions"]
+              }
+            }
+          }
         }
-      ]
+      ],
+      "unevaluatedProperties": false
     },
     "SchemaProperty": {
       "type": "object",
@@ -1926,6 +2419,9 @@
     "DataQuality": {
       "type": "object",
       "properties": {
+        "id": {
+          "$ref": "#/$defs/StableId"
+        },
         "authoritativeDefinitions": {
           "$ref": "#/$defs/AuthoritativeDefinitions"
         },
@@ -1991,11 +2487,24 @@
       "allOf": [
         {
           "if": {
-            "properties": {
-              "type": {
-                "const": "library"
+            "anyOf": [
+              {
+                "properties": {
+                  "type": {
+                    "const": "library"
+                  }
+                },
+                "required": ["type"]
+              },
+              {
+                "properties": {
+                  "metric": {
+                    "type": "string"
+                  }
+                },
+                "required": ["metric"]
               }
-            }
+            ]
           },
           "then": {
             "$ref": "#/$defs/DataQualityLibrary"
@@ -2027,7 +2536,8 @@
             "$ref": "#/$defs/DataQualityCustom"
           }
         }
-      ]
+      ],
+      "unevaluatedProperties": false
     },
     "DataQualityChecks": {
       "type": "array",
@@ -2036,61 +2546,126 @@
         "$ref": "#/$defs/DataQuality"
       }
     },
+    "DataQualityOperators": {
+      "type": "object",
+      "description": "Common comparison operators for data quality checks.",
+      "oneOf": [
+        {
+          "properties": {
+            "mustBe": {
+              "description": "Must be equal to the value to be valid. When using numbers, it is equivalent to '='."
+            }
+          },
+          "required": ["mustBe"]
+        },
+        {
+          "properties": {
+            "mustNotBe": {
+              "description": "Must not be equal to the value to be valid. When using numbers, it is equivalent to '!='."
+            }
+          },
+          "required": ["mustNotBe"]
+        },
+        {
+          "properties": {
+            "mustBeGreaterThan": {
+              "type": "number",
+              "description": "Must be greater than the value to be valid. It is equivalent to '>'."
+            }
+          },
+          "required": ["mustBeGreaterThan"]
+        },
+        {
+          "properties": {
+            "mustBeGreaterOrEqualTo": {
+              "type": "number",
+              "description": "Must be greater than or equal to the value to be valid. It is equivalent to '>='."
+            }
+          },
+          "required": ["mustBeGreaterOrEqualTo"]
+        },
+        {
+          "properties": {
+            "mustBeLessThan": {
+              "type": "number",
+              "description": "Must be less than the value to be valid. It is equivalent to '<'."
+            }
+          },
+          "required": ["mustBeLessThan"]
+        },
+        {
+          "properties": {
+            "mustBeLessOrEqualTo": {
+              "type": "number",
+              "description": "Must be less than or equal to the value to be valid. It is equivalent to '<='."
+            }
+          },
+          "required": ["mustBeLessOrEqualTo"]
+        },
+        {
+          "properties": {
+            "mustBeBetween": {
+              "type": "array",
+              "description": "Must be between the two numbers to be valid. Smallest number first in the array.",
+              "minItems": 2,
+              "maxItems": 2,
+              "uniqueItems": true,
+              "items": {
+                "type": "number"
+              }
+            }
+          },
+          "required": ["mustBeBetween"]
+        },
+        {
+          "properties": {
+            "mustNotBeBetween": {
+              "type": "array",
+              "description": "Must not be between the two numbers to be valid. Smallest number first in the array.",
+              "minItems": 2,
+              "maxItems": 2,
+              "uniqueItems": true,
+              "items": {
+                "type": "number"
+              }
+            }
+          },
+          "required": ["mustNotBeBetween"]
+        }
+      ]
+    },
     "DataQualityLibrary": {
       "type": "object",
+      "allOf": [
+        {
+          "$ref": "#/$defs/DataQualityOperators"
+        }
+      ],
       "properties": {
+        "metric": {
+          "type": "string",
+          "description": "Define a data quality check based on the predefined metrics as per ODCS.",
+          "enum": ["nullValues", "missingValues", "invalidValues", "duplicateValues", "rowCount"]
+        },
         "rule": {
           "type": "string",
-          "description": "Define a data quality check based on the predefined rules as per ODCS.",
-          "examples": ["duplicateCount", "validValues", "rowCount"]
+          "deprecated": true,
+          "description": "Use metric instead"
         },
-        "mustBe": {
-          "description": "Must be equal to the value to be valid. When using numbers, it is equivalent to '='."
-        },
-        "mustNotBe": {
-          "description": "Must not be equal to the value to be valid. When using numbers, it is equivalent to '!='."
-        },
-        "mustBeGreaterThan": {
-          "type": "number",
-          "description": "Must be greater than the value to be valid. It is equivalent to '>'."
-        },
-        "mustBeGreaterOrEqualTo": {
-          "type": "number",
-          "description": "Must be greater than or equal to the value to be valid. It is equivalent to '>='."
-        },
-        "mustBeLessThan": {
-          "type": "number",
-          "description": "Must be less than the value to be valid. It is equivalent to '<'."
-        },
-        "mustBeLessOrEqualTo": {
-          "type": "number",
-          "description": "Must be less than or equal to the value to be valid. It is equivalent to '<='."
-        },
-        "mustBeBetween": {
-          "type": "array",
-          "description": "Must be between the two numbers to be valid. Smallest number first in the array.",
-          "minItems": 2,
-          "maxItems": 2,
-          "uniqueItems": true,
-          "items": {
-            "type": "number"
-          }
-        },
-        "mustNotBeBetween": {
-          "type": "array",
-          "description": "Must not be between the two numbers to be valid. Smallest number first in the array.",
-          "minItems": 2,
-          "maxItems": 2,
-          "uniqueItems": true,
-          "items": {
-            "type": "number"
-          }
+        "arguments": {
+          "type": "object",
+          "description": "Additional arguments for the metric, if needed."
         }
       },
-      "required": ["rule"]
+      "required": ["metric"]
     },
     "DataQualitySql": {
       "type": "object",
+      "allOf": [
+        {
+          "$ref": "#/$defs/DataQualityOperators"
+        }
+      ],
       "properties": {
         "query": {
           "type": "string",
@@ -2127,17 +2702,25 @@
       "items": {
         "type": "object",
         "properties": {
+          "id": {
+            "$ref": "#/$defs/StableId"
+          },
           "url": {
             "type": "string",
             "description": "URL to the authority."
           },
           "type": {
             "type": "string",
-            "description": "Type of definition for authority: v2.3 adds standard values: `businessDefinition`, `transformationImplementation`, `videoTutorial`, `tutorial`, and `implementation`.",
-            "examples": ["businessDefinition", "transformationImplementation", "videoTutorial", "tutorial", "implementation"]
+            "description": "Type of definition for authority. See the recommended values in the documentation.",
+            "examples": ["businessDefinition", "canonicalUrl", "glossary", "implementation", "ontology", "taxonomy", "transformationImplementation", "tutorial", "videoTutorial"]
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of the authoritative definition for humans."
           }
         },
-        "required": ["url", "type"]
+        "required": ["url", "type"],
+        "additionalProperties": false
       }
     },
     "Support": {
@@ -2150,6 +2733,9 @@
     "SupportItem": {
       "type": "object",
       "properties": {
+        "id": {
+          "$ref": "#/$defs/StableId"
+        },
         "channel": {
           "type": "string",
           "description": "Channel name or identifier."
@@ -2164,24 +2750,31 @@
         },
         "tool": {
           "type": "string",
-          "description": "Name of the tool, value can be `email`, `slack`, `teams`, `discord`, `ticket`, or `other`.",
-          "examples": ["email", "slack", "teams", "discord", "ticket", "other"]
+          "description": "Name of the tool, value can be `email`, `slack`, `teams`, `discord`, `ticket`, `googlechat`, or `other`.",
+          "examples": ["email", "slack", "teams", "discord", "ticket", "googlechat", "other"]
         },
         "scope": {
           "type": "string",
-          "description": "Scope can be: `interactive`, `announcements`, `issues`.",
-          "examples": ["interactive", "announcements", "issues"]
+          "description": "Scope can be: `interactive`, `announcements`, `issues`, `notifications`.",
+          "examples": ["interactive", "announcements", "issues", "notifications"]
         },
         "invitationUrl": {
           "type": "string",
           "description": "Some tools uses invitation URL for requesting or subscribing. Follows the [URL scheme](https://en.wikipedia.org/wiki/URL#Syntax)."
+        },
+        "customProperties": {
+          "$ref": "#/$defs/CustomProperties"
         }
       },
-      "required": ["channel", "url"]
+      "required": ["channel"],
+      "additionalProperties": false
     },
     "Pricing": {
       "type": "object",
       "properties": {
+        "id": {
+          "$ref": "#/$defs/StableId"
+        },
         "priceAmount": {
           "type": "number",
           "description": "Subscription price per unit of measure in `priceUnit`."
@@ -2194,25 +2787,24 @@
           "type": "string",
           "description": "The unit of measure for calculating cost. Examples megabyte, gigabyte."
         }
-      }
+      },
+      "additionalProperties": false
     },
-    "Team": {
+    "TeamMember": {
       "type": "object",
+      "description": "Team member information.",
+      "additionalProperties": false,
       "properties": {
+        "id": {
+          "$ref": "#/$defs/StableId"
+        },
         "username": {
           "type": "string",
-          "description": "The user's username or email.",
-          "examples": [
-            "mail@example.com",
-            "uid12345678"
-          ]
+          "description": "The user's username or email."
         },
         "name": {
           "type": "string",
-          "description": "The user's name.",
-          "examples": [
-            "Jane Doe"
-          ]
+          "description": "The user's name."
         },
         "description": {
           "type": "string",
@@ -2235,12 +2827,67 @@
         "replacedByUsername": {
           "type": "string",
           "description": "The username of the user who replaced the previous user."
+        },
+        "tags": {
+          "$ref": "#/$defs/Tags"
+        },
+        "customProperties": {
+          "type": "array",
+          "description": "Custom properties block.",
+          "items": {
+            "$ref": "#/$defs/CustomProperty"
+          }
+        },
+        "authoritativeDefinitions": {
+          "$ref": "#/$defs/AuthoritativeDefinitions"
+        }
+      },
+      "required": ["username"]
+    },
+    "Team": {
+      "type": "object",
+      "description": "Team information.",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/StableId"
+        },
+        "name": {
+          "type": "string",
+          "description": "Team name."
+        },
+        "description": {
+          "type": "string",
+          "description": "Team description."
+        },
+        "members": {
+          "type": "array",
+          "description": "List of members.",
+          "items": {
+            "$ref": "#/$defs/TeamMember"
+          }
+        },
+        "tags": {
+          "$ref": "#/$defs/Tags"
+        },
+        "customProperties": {
+          "type": "array",
+          "description": "Custom properties block.",
+          "items": {
+            "$ref": "#/$defs/CustomProperty"
+          }
+        },
+        "authoritativeDefinitions": {
+          "$ref": "#/$defs/AuthoritativeDefinitions"
         }
       }
     },
     "Role": {
       "type": "object",
       "properties": {
+        "id": {
+          "$ref": "#/$defs/StableId"
+        },
         "role": {
           "type": "string",
           "description": "Name of the IAM role that provides access to the dataset."
@@ -2265,11 +2912,15 @@
           "$ref": "#/$defs/CustomProperties"
         }
       },
-      "required": ["role"]
+      "required": ["role"],
+      "additionalProperties": false
     },
     "ServiceLevelAgreementProperty": {
       "type": "object",
       "properties": {
+        "id": {
+          "$ref": "#/$defs/StableId"
+        },
         "property": {
           "type": "string",
           "description": "Specific property in SLA, check the periodic table. May requires units (more details to come)."
@@ -2310,9 +2961,31 @@
           "type": "string",
           "description": "Describes the importance of the SLA from the list of: `regulatory`, `analytics`, or `operational`.",
           "examples": ["regulatory", "analytics", "operational"]
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of the SLA for humans.",
+          "examples": ["99.9% of the time, data is available by 6 AM UTC"]
+        },
+        "scheduler": {
+          "type": "string",
+          "description": "Name of the scheduler, can be cron or any tool your organization support.",
+          "examples": ["cron"]
+        },
+        "schedule": {
+          "type": "string",
+          "description": "Configuration information for the scheduling tool, for cron a possible value is 0 20 * * *.",
+          "examples": ["0 20 * * *"]
+        },
+        "customProperties": {
+          "$ref": "#/$defs/CustomProperties"
+        },
+        "authoritativeDefinitions": {
+          "$ref": "#/$defs/AuthoritativeDefinitions"
         }
       },
-      "required": ["property", "value"]
+      "required": ["property", "value"],
+      "additionalProperties": false
     },
     "CustomProperties": {
       "type": "array",
@@ -2321,9 +2994,89 @@
         "$ref": "#/$defs/CustomProperty"
       }
     },
+    "EnumValue": {
+      "type": "object",
+      "description": "An allowed value within a property's enumeration. See RFC 0033.",
+      "properties": {
+        "value": {
+          "$ref": "#/$defs/AnyNonCollectionType",
+          "description": "The allowed value. Required."
+        },
+        "label": {
+          "type": "string",
+          "description": "Human-readable label for the value, suitable for UI display."
+        },
+        "id": {
+          "$ref": "#/$defs/StableId"
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional description of what this enum value represents."
+        },
+        "customProperties": {
+          "type": "array",
+          "description": "Custom properties attached to this enum value (e.g., translations).",
+          "items": {
+            "$ref": "#/$defs/CustomProperty"
+          }
+        },
+        "authoritativeDefinitions": {
+          "$ref": "#/$defs/AuthoritativeDefinitions"
+        },
+        "tags": {
+          "$ref": "#/$defs/Tags"
+        }
+      },
+      "required": ["value"],
+      "additionalProperties": false
+    },
+    "Synonyms": {
+      "type": "array",
+      "description": "A list of alternative names for the object. See RFC 0041.",
+      "items": {
+        "$ref": "#/$defs/Synonym"
+      }
+    },
+    "Synonym": {
+      "type": "object",
+      "description": "An alternative name for a named object, helping catalogs, AI/LLM tools, and natural language interfaces resolve business vocabulary to the underlying object. See RFC 0041.",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/StableId"
+        },
+        "synonym": {
+          "type": "string",
+          "description": "The synonymous term."
+        },
+        "description": {
+          "type": "string",
+          "description": "Short human-readable note about when or why this synonym is used."
+        },
+        "locale": {
+          "type": "string",
+          "description": "BCP 47 language tag (e.g., `en-US`, `fr-FR`) when the synonym is language-specific."
+        },
+        "source": {
+          "type": "string",
+          "description": "Origin of the synonym (e.g., `glossary`, `finance-team`, `legacy-system`)."
+        },
+        "status": {
+          "type": "string",
+          "description": "Lifecycle status of the synonym (e.g., `active`, `deprecated`)."
+        },
+        "customProperties": {
+          "$ref": "#/$defs/CustomProperties"
+        }
+      },
+      "required": ["synonym"],
+      "additionalProperties": false
+    },
     "CustomProperty": {
       "type": "object",
       "properties": {
+        "id": {
+          "$ref": "#/$defs/StableId"
+        },
         "property": {
           "type": "string",
           "description": "The name of the key. Names should be in camel case–the same as if they were permanent properties in the contract."
@@ -2331,8 +3084,19 @@
         "value": {
           "$ref": "#/$defs/AnyType",
           "description": "The value of the key."
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of the custom property."
+        },
+        "vendor": {
+          "type": "string",
+          "description": "Identifies the vendor, provider, or external system associated with this custom property. SHOULD be a stable, lowercase identifier matching ^[a-z0-9][a-z0-9-]*$ (e.g. confluent, zeenea, atlan, soda). Tools MUST preserve unknown vendor values.",
+          "examples": ["confluent", "zeenea", "atlan", "soda"]
         }
-      }
+      },
+      "required": ["property", "value"],
+      "additionalProperties": false
     },
     "AnyType": {
       "anyOf": [
@@ -2375,6 +3139,161 @@
         },
         {
           "type": "null"
+        }
+      ]
+    },
+    "RelationshipBase": {
+      "type": "object",
+      "description": "Base definition for relationships between properties, typically for foreign key constraints.",
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "The type of relationship. Defaults to 'foreignKey'.",
+          "default": "foreignKey",
+          "enum": ["foreignKey"]
+        },
+        "from": {
+          "oneOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ShorthandReference"
+                },
+                {
+                  "$ref": "#/$defs/FullyQualifiedReference"
+                }
+              ],
+              "description": "Source property reference using fully qualified or shorthand notation."
+            },
+            {
+              "type": "array",
+              "description": "Array of source properties for composite keys.",
+              "items": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/ShorthandReference"
+                  },
+                  {
+                    "$ref": "#/$defs/FullyQualifiedReference"
+                  }
+                ]
+              },
+              "minItems": 1
+            }
+          ],
+          "description": "Source property or properties."
+        },
+        "to": {
+          "oneOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ShorthandReference"
+                },
+                {
+                  "$ref": "#/$defs/FullyQualifiedReference"
+                }
+              ],
+              "description": "Target property reference using fully qualified or shorthand notation."
+            },
+            {
+              "type": "array",
+              "description": "Array of target properties for composite keys.",
+              "items": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/ShorthandReference"
+                  },
+                  {
+                    "$ref": "#/$defs/FullyQualifiedReference"
+                  }
+                ]
+              },
+              "minItems": 1
+            }
+          ],
+          "description": "Target property or properties to reference."
+        },
+        "customProperties": {
+          "$ref": "#/$defs/CustomProperties"
+        }
+      }
+    },
+    "RelationshipSchemaLevel": {
+      "type": "object",
+      "description": "Relationship definition at schema level, requiring both 'from' and 'to' fields with matching types.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/RelationshipBase"
+        },
+        {
+          "required": ["from", "to"]
+        },
+        {
+          "oneOf": [
+            {
+              "description": "Single-column relationship - both fields must be strings",
+              "properties": {
+                "from": {
+                  "type": "string"
+                },
+                "to": {
+                  "type": "string"
+                }
+              }
+            },
+            {
+              "description": "Composite key relationship - both fields must be arrays with matching lengths",
+              "properties": {
+                "from": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1
+                },
+                "to": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "RelationshipPropertyLevel": {
+      "type": "object",
+      "description": "Relationship definition at property level, where 'from' is implicitly the current property.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/RelationshipBase"
+        },
+        {
+          "type": "object",
+          "required": ["to"]
+        },
+        {
+          "not": {
+            "required": ["from"]
+          },
+          "description": "The 'from' field must not be specified at property level as it is implicitly derived from the property context"
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "Relationship": {
+      "description": "Compatibility wrapper for relationship definitions.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/RelationshipSchemaLevel"
+        },
+        {
+          "$ref": "#/$defs/RelationshipPropertyLevel"
         }
       ]
     }

@@ -69,6 +69,33 @@ class SchemaValidatorTest {
         return zip;
     }
 
+    // A WB-authored v3.1.0 contract shape (#51): logicalType/physicalType
+    // properties, array team — must pass with the `latest` vendored schema.
+    private static final String VALID_ODCS_V310 = """
+            apiVersion: v3.1.0
+            kind: DataContract
+            id: c2
+            version: 1.0.0
+            status: active
+            schema:
+              - name: t1
+                properties:
+                  - name: id
+                    logicalType: integer
+                    physicalType: INTEGER
+                    required: true
+            team:
+              - username: jgp
+                role: owner
+            """;
+
+    @Test
+    void wbAuthoredV310ContractPasses() throws IOException {
+        Path zip = zipOf(Map.of("podem/c2.odcs.yaml", VALID_ODCS_V310));
+        List<String> violations = SchemaValidator.validateZip(zip);
+        assertTrue(violations.isEmpty(), () -> String.join("\n", violations));
+    }
+
     @Test
     void validOdpsAndOdcsPass() throws IOException {
         Path zip = zipOf(Map.of(
