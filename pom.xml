@@ -6,7 +6,7 @@
 
     <groupId>ai.jgp.gha</groupId>
     <artifactId>data-product-uploader</artifactId>
-    <version>0.6.3</version>
+    <version>0.6.4</version>
     <packaging>jar</packaging>
 
     <name>Data Product Uploader</name>
@@ -41,6 +41,11 @@
             <groupId>com.fasterxml.jackson.dataformat</groupId>
             <artifactId>jackson-dataformat-yaml</artifactId>
             <version>${jackson.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.networknt</groupId>
+            <artifactId>json-schema-validator</artifactId>
+            <version>1.5.6</version>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>

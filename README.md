@@ -6,6 +6,7 @@ A Java CLI tool that uploads [ODPS](https://opendataproductspecification.com/) d
 
 The uploader takes a ZIP file containing `.odps.yaml` and `.odcs.yaml` descriptors and:
 
+0. **Validate** every descriptor in the bundle against the vendored Bitol JSON schemas (ODPS v1.0.0, ODCS v3.0.2 — classpath resources under `src/main/resources/schemas/`, no network needed; refresh by copying newer files from the standard repos). Any violation fails the run listing file + messages, and nothing is uploaded or published.
 1. **Request** an upload URL from the platform
 2. **Upload** the ZIP file to the provided S3 URL
 3. **Trigger** processing for the target catalog
