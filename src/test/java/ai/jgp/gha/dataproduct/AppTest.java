@@ -49,10 +49,35 @@ class AppTest {
         };
     }
 
+    /** A schema-valid ODPS body (#46) reused by the zip/product helpers. */
+    private static final String VALID_ODPS_YAML = """
+            apiVersion: v1.0.0
+            kind: DataProduct
+            id: my-product
+            status: active
+            name: My Product
+            version: 1.2.3
+            """;
+
+    /**
+     * Writes a real ZIP holding one schema-valid ODPS entry — the #46 gate
+     * validates the actual bundle, so tests that reach the upload path need
+     * a bundle that passes.
+     */
+    private Path writeValidZip(String name) throws IOException {
+        Path zip = tmp.resolve(name);
+        try (java.util.zip.ZipOutputStream zos =
+                 new java.util.zip.ZipOutputStream(Files.newOutputStream(zip))) {
+            zos.putNextEntry(new java.util.zip.ZipEntry("podem/my-product.odps.yaml"));
+            zos.write(VALID_ODPS_YAML.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            zos.closeEntry();
+        }
+        return zip;
+    }
+
     @Test
     void main_singleZipFile_uploadSucceeds_exitsZero() throws Exception {
-        Path zip = tmp.resolve("bundle.zip");
-        Files.writeString(zip, "x");
+        Path zip = writeValidZip("bundle.zip");
 
         try (MockedConstruction<ZeeneaClient> zc = mockConstruction(ZeeneaClient.class,
                 (mock, ctx) -> when(mock.upload()).thenReturn(true))) {
@@ -66,8 +91,7 @@ class AppTest {
 
     @Test
     void main_singleZipFile_uploadFails_exitsOne() throws Exception {
-        Path zip = tmp.resolve("bundle.zip");
-        Files.writeString(zip, "x");
+        Path zip = writeValidZip("bundle.zip");
 
         try (MockedConstruction<ZeeneaClient> zc = mockConstruction(ZeeneaClient.class,
                 (mock, ctx) -> when(mock.upload()).thenReturn(false))) {
@@ -82,8 +106,7 @@ class AppTest {
     void main_singleProductYaml_buildsZipAndUploads() throws Exception {
         Path yaml = tmp.resolve("product.odps.yaml");
         Files.writeString(yaml, "id: x");
-        Path builtZip = tmp.resolve("built.zip");
-        Files.writeString(builtZip, "zip");
+        Path builtZip = writeValidZip("built.zip");
 
         try (MockedStatic<ZipBuilder> zb = mockStatic(ZipBuilder.class);
              MockedConstruction<ZeeneaClient> zc = mockConstruction(ZeeneaClient.class,
@@ -116,9 +139,31 @@ class AppTest {
     }
 
     @Test
+    void main_schemaInvalidBundle_failsRun_noUpload_noKafka() throws Exception {
+        // A ZIP whose ODPS is missing required fields (#46).
+        Path zip = tmp.resolve("invalid.zip");
+        try (java.util.zip.ZipOutputStream zos =
+                 new java.util.zip.ZipOutputStream(Files.newOutputStream(zip))) {
+            zos.putNextEntry(new java.util.zip.ZipEntry("podem/bad.odps.yaml"));
+            zos.write("id: bad\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            zos.closeEntry();
+        }
+
+        try (MockedConstruction<ZeeneaClient> zc = mockConstruction(ZeeneaClient.class);
+             MockedConstruction<KafkaPublisher> kp = mockConstruction(KafkaPublisher.class)) {
+
+            int code = SystemStubs.catchSystemExit(() -> App.main(kafkaArgs(zip)));
+
+            assertEquals(1, code);
+            // Nothing uploaded, nothing published.
+            assertEquals(0, zc.constructed().size());
+            assertEquals(0, kp.constructed().size());
+        }
+    }
+
+    @Test
     void main_debugFlag_enablesFineLogging_andExitsZero() throws Exception {
-        Path zip = tmp.resolve("bundle.zip");
-        Files.writeString(zip, "x");
+        Path zip = writeValidZip("bundle.zip");
 
         String[] args = {
                 "--file", zip.toString(),
@@ -188,8 +233,7 @@ class AppTest {
 
     @Test
     void main_uploadFailsWithKafkaConfigured_rawZip_doesNotPublish_exitsOne() throws Exception {
-        Path zip = tmp.resolve("bundle.zip");
-        Files.writeString(zip, "x");
+        Path zip = writeValidZip("bundle.zip");
 
         try (MockedConstruction<ZeeneaClient> zc = mockConstruction(ZeeneaClient.class,
                 (mock, ctx) -> when(mock.upload()).thenReturn(false));
@@ -226,8 +270,7 @@ class AppTest {
     @Test
     void main_dirMode_allProductsSucceed_exitsZero() throws Exception {
         Path dir = Files.createDirectory(tmp.resolve("repo"));
-        Path built = tmp.resolve("built.zip");
-        Files.writeString(built, "z");
+        Path built = writeValidZip("built.zip");
 
         String[] args = {
                 "--dir", dir.toString(),
@@ -252,8 +295,7 @@ class AppTest {
     @Test
     void main_dirMode_someProductsFail_exitsOne() throws Exception {
         Path dir = Files.createDirectory(tmp.resolve("repo"));
-        Path built = tmp.resolve("built.zip");
-        Files.writeString(built, "z");
+        Path built = writeValidZip("built.zip");
 
         String[] args = {
                 "--dir", dir.toString(),
@@ -305,7 +347,7 @@ class AppTest {
 
     private Path productYaml() throws IOException {
         Path yaml = tmp.resolve("my-product.odps.yaml");
-        Files.writeString(yaml, "id: my-product\nversion: 1.2.3\n");
+        Files.writeString(yaml, VALID_ODPS_YAML);
         return yaml;
     }
 
@@ -412,8 +454,7 @@ class AppTest {
 
     @Test
     void main_rawZip_uploadSucceeds_publishesNothingToKafka() throws Exception {
-        Path zip = tmp.resolve("bundle.zip");
-        Files.writeString(zip, "zipdata");
+        Path zip = writeValidZip("bundle.zip");
 
         try (MockedConstruction<ZeeneaClient> zc = mockConstruction(ZeeneaClient.class,
                 (mock, ctx) -> when(mock.upload()).thenReturn(true));

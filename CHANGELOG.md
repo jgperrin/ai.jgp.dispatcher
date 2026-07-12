@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.4] - 2026-07-11
+
+### Added
+
+- **JSON-schema validation before upload** (#46, epic `controlcenter#99`). New `SchemaValidator` validates every `.odps.yaml` / `.odcs.yaml` entry of the exact bundle about to ship against the vendored Bitol schemas (`odps-json-schema-v1.0.0.json`, `odcs-json-schema-v3.0.2.json`, draft 2019-09, classpath resources — offline-safe; source noted in the class javadoc for refreshes). Any violation fails the run (exit ≠ 0) listing file + violation messages, and neither the Zeenea upload nor any Kafka publish happens. Unparseable YAML and unreadable ZIPs are violations, not exceptions. Applies to directory mode, single product YAML, and pre-built ZIPs alike. Dependency: com.networknt:json-schema-validator 1.5.6.
+
 ## [0.6.3] - 2026-07-11
 
 ### Changed

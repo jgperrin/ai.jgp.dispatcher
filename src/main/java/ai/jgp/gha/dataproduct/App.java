@@ -94,6 +94,12 @@ public class App {
             String zipPath = builtZip.toAbsolutePath().toString();
             System.out.println();
 
+            // #46: schema-invalid specs never leave the repo — no Zeenea
+            // upload and no Kafka publish, the run fails loudly instead.
+            if (!validateBundle(builtZip)) {
+                return false;
+            }
+
             ZeeneaClient client = new ZeeneaClient(config, zipPath);
             success = client.upload();
             uploadId = client.getLastUploadId();
@@ -137,6 +143,12 @@ public class App {
             }
         }
 
+        // #46: validate the exact bundle that would be uploaded — covers the
+        // product YAML and every bundled contract, and pre-built ZIPs too.
+        if (!validateBundle(Path.of(zipPath))) {
+            return false;
+        }
+
         ZeeneaClient client = new ZeeneaClient(config, zipPath);
         boolean success = client.upload();
         String uploadId = client.getLastUploadId();
@@ -144,6 +156,24 @@ public class App {
 
         publishToKafka(config, success ? productFile : null, success, ref, uploadId, error);
         return success;
+    }
+
+    /**
+     * Runs the #46 schema gate on a spec ZIP. Prints each violation and
+     * returns false when the bundle is invalid; on success logs a one-line
+     * summary and returns true.
+     */
+    private static boolean validateBundle(Path zip) {
+        List<String> violations = SchemaValidator.validateZip(zip);
+        if (!violations.isEmpty()) {
+            System.err.println("Schema validation failed — nothing uploaded or published:");
+            for (String v : violations) {
+                System.err.println("  " + v);
+            }
+            return false;
+        }
+        System.out.println("Schema validation passed for " + zip.getFileName());
+        return true;
     }
 
     /**
