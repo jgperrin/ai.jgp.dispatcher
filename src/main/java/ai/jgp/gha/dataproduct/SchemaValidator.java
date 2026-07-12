@@ -30,7 +30,7 @@ import java.util.zip.ZipInputStream;
  * <ul>
  *   <li>{@code odps-json-schema-v1.0.0.json} — from
  *       github.com/bitol-io/open-data-product-standard {@code schema/}</li>
- *   <li>{@code odcs-json-schema-v3.0.2.json} — from
+ *   <li>{@code odcs-json-schema-latest.json} (v3.2.0-capable) — from
  *       github.com/bitol-io/open-data-contract-standard {@code schema/}</li>
  * </ul>
  * Both declare JSON Schema draft 2019-09. To refresh, copy the newer file
@@ -39,7 +39,7 @@ import java.util.zip.ZipInputStream;
 public final class SchemaValidator {
 
     static final String ODPS_SCHEMA = "/schemas/odps-json-schema-v1.0.0.json";
-    static final String ODCS_SCHEMA = "/schemas/odcs-json-schema-v3.0.2.json";
+    static final String ODCS_SCHEMA = "/schemas/odcs-json-schema-latest.json";
 
     private static final ObjectMapper YAML = new ObjectMapper(new YAMLFactory());
     private static final ObjectMapper JSON = new ObjectMapper();

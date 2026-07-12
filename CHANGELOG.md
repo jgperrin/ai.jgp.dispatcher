@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.6] - 2026-07-12
+
+### Fixed
+
+- **ODCS gate accepts Workbench-authored v3.1.0 contracts** (#51, epic `controlcenter#99`). The vendored `odcs-json-schema-v3.0.2.json` rejected every real WB contract (`apiVersion` enum, v3.1.0 property shapes); replaced with `odcs-json-schema-latest.json` from the standard repo (v3.2.0…v2.2.0, draft 2019-09). Found live by the epic E2E in `data-contracts-private`. New v3.1.0-shape test.
+
 ## [0.6.5] - 2026-07-11
 
 ### Changed
