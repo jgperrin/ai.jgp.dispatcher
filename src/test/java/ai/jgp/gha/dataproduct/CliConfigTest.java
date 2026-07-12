@@ -129,12 +129,59 @@ class CliConfigTest {
                 "--kafka-broker", "kafka.example.com:9093",
                 "--kafka-user", "kuser",
                 "--kafka-password", "kpwd",
+                "--org-id", "3f2b8c1e-9a4d-4e7f-b6a5-1c2d3e4f5a6b",
         });
 
         assertTrue(cfg.isKafkaConfigured());
         assertEquals("kafka.example.com:9093", cfg.getKafkaBroker());
         assertEquals("kuser", cfg.getKafkaUser());
         assertEquals("kpwd", cfg.getKafkaPassword());
+        assertEquals("3f2b8c1e-9a4d-4e7f-b6a5-1c2d3e4f5a6b", cfg.getOrgId());
+    }
+
+    @Test
+    void parse_kafkaWithoutOrgId_failsClosed_exitsOne() throws Exception {
+        Path zip = tmp.resolve("bundle.zip");
+        Files.writeString(zip, "x");
+
+        int code = SystemStubs.catchSystemExit(() -> CliConfig.parse(new String[]{
+                "--file", zip.toString(),
+                "--tenant", "acme",
+                "--api-key", "secret",
+                "--kafka-broker", "kafka.example.com:9093",
+        }));
+
+        assertEquals(1, code);
+    }
+
+    @Test
+    void parse_orgIdEnvFallback_satisfiesKafkaRequirement() throws Exception {
+        Path zip = tmp.resolve("bundle.zip");
+        Files.writeString(zip, "x");
+        env.set(K.ENV_ORG_ID, "aaaa1111-2222-3333-4444-555566667777");
+
+        CliConfig cfg = CliConfig.parse(new String[]{
+                "--file", zip.toString(),
+                "--tenant", "acme",
+                "--api-key", "secret",
+                "--kafka-broker", "kafka.example.com:9093",
+        });
+
+        assertEquals("aaaa1111-2222-3333-4444-555566667777", cfg.getOrgId());
+    }
+
+    @Test
+    void parse_noKafka_orgIdOptional() throws IOException {
+        Path zip = tmp.resolve("bundle.zip");
+        Files.writeString(zip, "x");
+
+        CliConfig cfg = CliConfig.parse(new String[]{
+                "--file", zip.toString(),
+                "--tenant", "acme",
+                "--api-key", "secret",
+        });
+
+        assertFalse(cfg.isKafkaConfigured());
     }
 
     @Test
@@ -179,6 +226,7 @@ class CliConfigTest {
         env.set(K.ENV_KAFKA_BROKER, "envbroker:9093");
         env.set(K.ENV_KAFKA_USER, "envU");
         env.set(K.ENV_KAFKA_PASSWORD, "envP");
+        env.set(K.ENV_ORG_ID, "envOrg");
 
         CliConfig cfg = CliConfig.parse(new String[]{});
 
@@ -190,6 +238,7 @@ class CliConfigTest {
         assertEquals("envbroker:9093", cfg.getKafkaBroker());
         assertEquals("envU", cfg.getKafkaUser());
         assertEquals("envP", cfg.getKafkaPassword());
+        assertEquals("envOrg", cfg.getOrgId());
     }
 
     @Test

@@ -15,10 +15,12 @@ public class CliConfig {
     private final String kafkaBroker;
     private final String kafkaUser;
     private final String kafkaPassword;
+    private final String orgId;
 
     private CliConfig(String filePath, String dirPath, String tenant, String apiKey,
                       String catalogCode, String baseUrl, boolean debug,
-                      String kafkaBroker, String kafkaUser, String kafkaPassword) {
+                      String kafkaBroker, String kafkaUser, String kafkaPassword,
+                      String orgId) {
         this.filePath = filePath;
         this.dirPath = dirPath;
         this.tenant = tenant;
@@ -29,6 +31,7 @@ public class CliConfig {
         this.kafkaBroker = kafkaBroker;
         this.kafkaUser = kafkaUser;
         this.kafkaPassword = kafkaPassword;
+        this.orgId = orgId;
     }
 
     public static CliConfig parse(String[] args) {
@@ -42,6 +45,7 @@ public class CliConfig {
         String kafkaBroker = null;
         String kafkaUser = null;
         String kafkaPassword = null;
+        String orgId = null;
 
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
@@ -71,6 +75,9 @@ public class CliConfig {
                     break;
                 case "--kafka-password":
                     kafkaPassword = nextArg(args, i++, "--kafka-password");
+                    break;
+                case "--org-id":
+                    orgId = nextArg(args, i++, "--org-id");
                     break;
                 case "--debug":
                     debug = true;
@@ -103,6 +110,7 @@ public class CliConfig {
         if (kafkaBroker == null) kafkaBroker = envOrNull(K.ENV_KAFKA_BROKER);
         if (kafkaUser == null) kafkaUser = envOrNull(K.ENV_KAFKA_USER);
         if (kafkaPassword == null) kafkaPassword = envOrNull(K.ENV_KAFKA_PASSWORD);
+        if (orgId == null) orgId = envOrNull(K.ENV_ORG_ID);
 
         // Validate required fields
         boolean valid = true;
@@ -122,6 +130,12 @@ public class CliConfig {
         }
         if (apiKey == null || apiKey.isBlank()) {
             System.err.println("Error: --api-key is required (or set ZEENEA_API_KEY)");
+            valid = false;
+        }
+        // Fail closed: the CC drops descriptors records without a valid
+        // x-org-id header, so publishing without an org id is never useful.
+        if (kafkaBroker != null && (orgId == null || orgId.isBlank())) {
+            System.err.println("Error: --org-id is required when Kafka is configured (or set X_ORG_ID)");
             valid = false;
         }
         if (!valid) {
@@ -147,7 +161,7 @@ public class CliConfig {
         }
 
         return new CliConfig(file, dir, tenant, apiKey, catalog, baseUrl, debug,
-                kafkaBroker, kafkaUser, kafkaPassword);
+                kafkaBroker, kafkaUser, kafkaPassword, orgId);
     }
 
     private static String envOrNull(String name) {
@@ -180,6 +194,8 @@ public class CliConfig {
         System.out.println("  --kafka-broker <url>    Kafka broker URL (optional)");
         System.out.println("  --kafka-user <user>     Kafka SASL username (optional)");
         System.out.println("  --kafka-password <pwd>  Kafka SASL password (optional)");
+        System.out.println("  --org-id <uuid>         Authoring org UUID, stamped as x-org-id");
+        System.out.println("                          (required when Kafka is configured)");
         System.out.println("  --debug                 Enable debug logging");
         System.out.println("  --version, -v           Show version");
         System.out.println("  --help, -h              Show this help");
@@ -196,6 +212,7 @@ public class CliConfig {
         System.out.println("  KAFKA_BROKER_URL    Fallback for --kafka-broker");
         System.out.println("  KAFKA_USERNAME      Fallback for --kafka-user");
         System.out.println("  KAFKA_PASSWORD      Fallback for --kafka-password");
+        System.out.println("  X_ORG_ID            Fallback for --org-id");
     }
 
     public String getFilePath() {
@@ -236,6 +253,10 @@ public class CliConfig {
 
     public String getKafkaPassword() {
         return kafkaPassword;
+    }
+
+    public String getOrgId() {
+        return orgId;
     }
 
     /**
