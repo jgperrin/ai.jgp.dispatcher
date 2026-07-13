@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.8] - 2026-07-13
+
+### Added
+
+- **Descriptor ZIP bundle published to Kafka for the Control Center (#55, epic controlcenter#111).** After ZipBuilder assembles a product's bundle (the exact bytes Zeenea gets), the dispatcher now also publishes it to the new `controlcenter.dataproduct.bundles` topic — key = product id, `x-org-id` header, and a new `x-content-kind: dataproduct-bundle-zip` header so the CC can route it to bundle ingest (controlcenter#109, which fills the CC's `contract` table and answers sidecar `request-odcs`). The per-product ODPS publish (#45) and Zeenea upload are unchanged during the transition. The bundle send rides the #54 hardened sender: retried, and fail-closed — a lost bundle fails the run. Bundle size is logged, with a warning as it approaches the broker's 1 MB record ceiling. The topic was created on the broker alongside the existing three.
+
 ## [0.6.7] - 2026-07-13
 
 ### Fixed

@@ -181,6 +181,43 @@ public class KafkaPublisher {
     }
 
     /**
+     * Publishes a product's full descriptor ZIP bundle (all ODPS + ODCS,
+     * byte-identical to the Zeenea upload) to the bundles topic (#55).
+     * Keyed by product id, stamped with {@link K#KAFKA_HEADER_ORG_ID} and
+     * {@link K#KAFKA_HEADER_KIND}={@link K#BUNDLE_KIND} so the CC can route
+     * it to bundle ingest (controlcenter#109). Blocks until the send
+     * completes or fails; retried + fail-closed per #54.
+     *
+     * @param topic     the Kafka topic to publish to
+     * @param productId the ODPS product id (message key)
+     * @param zipBytes  the bundle bytes (tens of KB; logged, must stay well
+     *                  under the broker's 1 MB default)
+     * @param orgId     the authoring tenant's org UUID (x-org-id header)
+     * @return true if published successfully, false otherwise
+     */
+    public boolean publishBundle(String topic, String productId, byte[] zipBytes, String orgId) {
+        System.out.println("  Bundle size: " + zipBytes.length + " bytes ("
+                + productId + ")");
+        if (zipBytes.length > 900_000) {
+            System.err.println("  Warning: bundle approaches the broker's 1 MB "
+                    + "record limit (" + zipBytes.length + " bytes)");
+        }
+        return send(buildBundleRecord(topic, productId, zipBytes, orgId));
+    }
+
+    /** Builds the bundle record — package-private for shape tests (#55). */
+    static ProducerRecord<String, byte[]> buildBundleRecord(String topic,
+            String productId, byte[] zipBytes, String orgId) {
+        ProducerRecord<String, byte[]> record =
+                new ProducerRecord<>(topic, productId, zipBytes);
+        record.headers().add(K.KAFKA_HEADER_ORG_ID,
+                orgId.getBytes(StandardCharsets.UTF_8));
+        record.headers().add(K.KAFKA_HEADER_KIND,
+                K.BUNDLE_KIND.getBytes(StandardCharsets.UTF_8));
+        return record;
+    }
+
+    /**
      * Publishes an append-only sync-status event to the status topic
      * ({@link K#KAFKA_TOPIC_CATALOG_FEEDBACK}) as a single UTF-8 JSON message (#35).
      * Best-effort: returns false on failure without throwing, so a failed

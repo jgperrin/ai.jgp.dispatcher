@@ -87,11 +87,12 @@ public class App {
     private static boolean processProduct(CliConfig config, String productFile) {
         ProductRef ref = ZipBuilder.parseProductRef(productFile);
         boolean success = false;
+        String zipPath = null;
         String uploadId = null;
         String error = null;
         try {
             Path builtZip = ZipBuilder.buildFromProduct(productFile);
-            String zipPath = builtZip.toAbsolutePath().toString();
+            zipPath = builtZip.toAbsolutePath().toString();
             System.out.println();
 
             // #46: schema-invalid specs never leave the repo — no Zeenea
@@ -113,16 +114,16 @@ public class App {
         }
 
         boolean kafkaOk = publishToKafka(config, success ? productFile : null,
-                success, ref, uploadId, error);
+                success ? zipPath : null, success, ref, uploadId, error);
         return success && kafkaOk;
     }
 
     /**
      * Single file mode: handles a ZIP or .odps.yaml file directly. A product
      * YAML yields a {@link ProductRef} so a sync-status event can be emitted
-     * (#35) and its ODPS spec published on success (#45); a pre-built ZIP
-     * carries no ODPS coordinates, so both are skipped for it — the CC only
-     * ingests per-product ODPS YAML, never ZIP bytes.
+     * (#35), its ODPS spec (#45) and descriptor bundle (#55) published on
+     * success; a pre-built ZIP carries no ODPS coordinates, so all three are
+     * skipped for it — CC records need a product-id key.
      */
     private static boolean processSingleFile(CliConfig config) {
         String zipPath = config.getFilePath();
@@ -139,7 +140,7 @@ public class App {
                 String error = e.getClass().getSimpleName() + ": " + e.getMessage();
                 System.err.println("Error building ZIP from product YAML: " + e.getMessage());
                 log.log(Level.SEVERE, "ZipBuilder failed", e);
-                publishToKafka(config, null, false, ref, null, error);
+                publishToKafka(config, null, null, false, ref, null, error);
                 return false;
             }
         }
@@ -155,7 +156,10 @@ public class App {
         String uploadId = client.getLastUploadId();
         String error = success ? null : client.getLastError();
 
+        // The bundle publish follows the spec publish's gating: only for a
+        // product YAML (a pre-built ZIP has no ODPS coordinates) on success.
         boolean kafkaOk = publishToKafka(config, success ? productFile : null,
+                success && productFile != null ? zipPath : null,
                 success, ref, uploadId, error);
         return success && kafkaOk;
     }
@@ -199,15 +203,18 @@ public class App {
      *
      * @param productFile    path to the product's ODPS YAML to publish, or null
      *                       to skip the spec publish (upload failed / raw ZIP)
+     * @param bundlePath     path to the built descriptor ZIP to publish to the
+     *                       bundles topic (#55), or null to skip
      * @param uploadSucceeded whether the Zeenea upload succeeded
      * @param ref            the product's id/version, or null (e.g. pre-built ZIP)
      * @param uploadId       the Zeenea upload id, or null
      * @param error          failure reason, or null on success
      * @return true when every required publish succeeded (or none was due);
-     *         false when a due descriptor publish failed
+     *         false when a due descriptor or bundle publish failed
      */
-    private static boolean publishToKafka(CliConfig config, String productFile, boolean uploadSucceeded,
-                                          ProductRef ref, String uploadId, String error) {
+    private static boolean publishToKafka(CliConfig config, String productFile, String bundlePath,
+                                          boolean uploadSucceeded, ProductRef ref, String uploadId,
+                                          String error) {
         if (!config.isKafkaConfigured()) {
             log.fine("Kafka not configured, skipping Kafka publishing");
             return true;
@@ -217,9 +224,10 @@ public class App {
         if (productFile != null && !publishSpec) {
             System.err.println("  Skipping spec publish: no ODPS id in " + productFile);
         }
+        boolean publishBundle = bundlePath != null && ref != null && ref.hasId();
         boolean publishStatus = ref != null && ref.hasId();
-        if (!publishSpec && !publishStatus) {
-            log.fine("Nothing to publish to Kafka (no spec, no keyable status event)");
+        if (!publishSpec && !publishBundle && !publishStatus) {
+            log.fine("Nothing to publish to Kafka (no spec, no bundle, no keyable status event)");
             return true;
         }
 
@@ -228,6 +236,7 @@ public class App {
 
         KafkaPublisher publisher = null;
         boolean specOk = !publishSpec;
+        boolean bundleOk = !publishBundle;
         try {
             publisher = new KafkaPublisher(
                     config.getKafkaBroker(),
@@ -235,7 +244,7 @@ public class App {
                     config.getKafkaPassword());
 
             if (!publisher.isConnected()) {
-                if (publishSpec) {
+                if (publishSpec || publishBundle) {
                     System.err.println("Error: Kafka broker is not reachable and a descriptor "
                             + "publish is due — failing the run (fail closed, #54).");
                     return false;
@@ -246,6 +255,9 @@ public class App {
 
             if (publishSpec) {
                 specOk = publishSpec(publisher, config, ref, productFile);
+            }
+            if (publishBundle) {
+                bundleOk = publishBundle(publisher, config, ref, bundlePath);
             }
             if (publishStatus) {
                 publishStatus(publisher, config, ref, uploadSucceeded, uploadId, error);
@@ -258,11 +270,11 @@ public class App {
                 publisher.close();
             }
         }
-        if (!specOk) {
+        if (!specOk || !bundleOk) {
             System.err.println("Error: descriptor publish failed — failing the run "
                     + "(fail closed, #54) so change detection retries it next run.");
         }
-        return specOk;
+        return specOk && bundleOk;
     }
 
     /** Reads the product's ODPS YAML and publishes it to the descriptors topic (#45). */
@@ -277,6 +289,22 @@ public class App {
                     + " v" + ref.version() + " (" + odpsYaml.length() + " chars)");
         } else {
             System.err.println("  Failed to publish ODPS spec to Kafka.");
+        }
+        return ok;
+    }
+
+    /** Publishes the built descriptor ZIP bundle to the bundles topic (#55). */
+    private static boolean publishBundle(KafkaPublisher publisher, CliConfig config, ProductRef ref,
+                                         String bundlePath) throws java.io.IOException {
+        byte[] zipBytes = Files.readAllBytes(Path.of(bundlePath));
+
+        boolean ok = publisher.publishBundle(
+                K.KAFKA_TOPIC_BUNDLES, ref.id(), zipBytes, config.getOrgId());
+        if (ok) {
+            System.out.println("  Published descriptor bundle: " + ref.id()
+                    + " v" + ref.version() + " (" + zipBytes.length + " bytes)");
+        } else {
+            System.err.println("  Failed to publish descriptor bundle to Kafka.");
         }
         return ok;
     }

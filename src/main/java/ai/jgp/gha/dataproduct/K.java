@@ -5,7 +5,7 @@ package ai.jgp.gha.dataproduct;
  */
 public class K {
 
-    public static final String VERSION = "0.6.7";
+    public static final String VERSION = "0.6.8";
 
     public static final String DEFAULT_CATALOG = "default";
 
@@ -39,7 +39,14 @@ public class K {
     // Flag/env act as overrides — this file is the zero-setup default.
     public static final String ORG_METADATA_FILE = ".workbench.yaml";
     public static final String KAFKA_HEADER_ORG_ID = "x-org-id";
+    // Marks a record's payload kind (#55); bundle records carry BUNDLE_KIND.
+    public static final String KAFKA_HEADER_KIND = "x-content-kind";
+    public static final String BUNDLE_KIND = "dataproduct-bundle-zip";
     public static final String KAFKA_TOPIC_DESCRIPTORS = "controlcenter.dataproduct.descriptors";
+    // The full descriptor ZIP bundle (all ODPS + ODCS, byte-identical to the
+    // Zeenea upload), published per product for the CC's contract ingest
+    // (#55, controlcenter#109). Separate topic keeps YAML consumers untouched.
+    public static final String KAFKA_TOPIC_BUNDLES = "controlcenter.dataproduct.bundles";
     // Per-asset Zeenea sync-status events (#35), consumed by svc (#758).
     public static final String KAFKA_TOPIC_CATALOG_FEEDBACK = "workbench.catalog.feedback";
 

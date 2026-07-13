@@ -188,6 +188,8 @@ class AppTest {
              MockedConstruction<KafkaPublisher> kp = mockConstruction(KafkaPublisher.class,
                      (mock, ctx) -> {
                          when(mock.isConnected()).thenReturn(true);
+                         when(mock.publishBundle(anyString(), anyString(), any(byte[].class), anyString()))
+                                 .thenReturn(true);
                          when(mock.publishSpec(anyString(), anyString(), anyString(), anyString()))
                                  .thenReturn(true);
                          when(mock.publishStatus(anyString(), anyString())).thenReturn(true);
@@ -222,6 +224,8 @@ class AppTest {
              MockedConstruction<KafkaPublisher> kp = mockConstruction(KafkaPublisher.class,
                      (mock, ctx) -> {
                          when(mock.isConnected()).thenReturn(true);
+                         when(mock.publishBundle(anyString(), anyString(), any(byte[].class), anyString()))
+                                 .thenReturn(true);
                          when(mock.publishSpec(anyString(), anyString(), anyString(), anyString()))
                                  .thenThrow(new RuntimeException("kafka down"));
                      })) {
@@ -240,6 +244,8 @@ class AppTest {
              MockedConstruction<KafkaPublisher> kp = mockConstruction(KafkaPublisher.class,
                      (mock, ctx) -> {
                          when(mock.isConnected()).thenReturn(true);
+                         when(mock.publishBundle(anyString(), anyString(), any(byte[].class), anyString()))
+                                 .thenReturn(true);
                          when(mock.publishSpec(anyString(), anyString(), anyString(), anyString()))
                                  .thenReturn(false);
                          when(mock.publishStatus(anyString(), anyString())).thenReturn(true);
@@ -253,12 +259,77 @@ class AppTest {
     }
 
     @Test
+    void main_bundlePublishReturnsFalse_failsClosed_exitsOne() throws Exception {
+        try (MockedConstruction<ZeeneaClient> zc = mockConstruction(ZeeneaClient.class,
+                (mock, ctx) -> when(mock.upload()).thenReturn(true));
+             MockedConstruction<KafkaPublisher> kp = mockConstruction(KafkaPublisher.class,
+                     (mock, ctx) -> {
+                         when(mock.isConnected()).thenReturn(true);
+                         when(mock.publishSpec(anyString(), anyString(), anyString(), anyString()))
+                                 .thenReturn(true);
+                         when(mock.publishBundle(anyString(), anyString(), any(byte[].class), anyString()))
+                                 .thenReturn(false);
+                         when(mock.publishStatus(anyString(), anyString())).thenReturn(true);
+                     })) {
+
+            int code = SystemStubs.catchSystemExit(() -> App.main(kafkaArgs(productYaml())));
+
+            // #55: the bundle publish is fail-closed like the spec publish.
+            assertEquals(1, code);
+        }
+    }
+
+    @Test
+    void main_uploadSucceeds_publishesBundle_zipBytesKeyAndOrg() throws Exception {
+        try (MockedConstruction<ZeeneaClient> zc = mockConstruction(ZeeneaClient.class,
+                (mock, ctx) -> when(mock.upload()).thenReturn(true));
+             MockedConstruction<KafkaPublisher> kp = mockConstruction(KafkaPublisher.class,
+                     (mock, ctx) -> {
+                         when(mock.isConnected()).thenReturn(true);
+                         when(mock.publishSpec(anyString(), anyString(), anyString(), anyString()))
+                                 .thenReturn(true);
+                         when(mock.publishBundle(anyString(), anyString(), any(byte[].class), anyString()))
+                                 .thenReturn(true);
+                         when(mock.publishStatus(anyString(), anyString())).thenReturn(true);
+                     })) {
+
+            int code = SystemStubs.catchSystemExit(() -> App.main(kafkaArgs(productYaml())));
+
+            assertEquals(0, code);
+            KafkaPublisher pub = kp.constructed().get(0);
+
+            // #55: bundle published to the bundles topic, keyed by product id,
+            // org forwarded, and the bytes are the real built ZIP — they unzip
+            // back to the ODPS entry.
+            ArgumentCaptor<byte[]> bytes = ArgumentCaptor.forClass(byte[].class);
+            verify(pub).publishBundle(eq(K.KAFKA_TOPIC_BUNDLES), eq("my-product"),
+                    bytes.capture(), eq(ORG_ID));
+            boolean foundOdps = false;
+            try (java.util.zip.ZipInputStream zis = new java.util.zip.ZipInputStream(
+                    new java.io.ByteArrayInputStream(bytes.getValue()))) {
+                java.util.zip.ZipEntry entry;
+                while ((entry = zis.getNextEntry()) != null) {
+                    if (entry.getName().endsWith(".odps.yaml")) {
+                        String content = new String(zis.readAllBytes(),
+                                java.nio.charset.StandardCharsets.UTF_8);
+                        assertTrue(content.contains("id: my-product"), content);
+                        foundOdps = true;
+                    }
+                }
+            }
+            assertTrue(foundOdps, "bundle must contain the ODPS entry");
+        }
+    }
+
+    @Test
     void main_statusPublishFails_specSucceeds_staysBestEffort_exitsZero() throws Exception {
         try (MockedConstruction<ZeeneaClient> zc = mockConstruction(ZeeneaClient.class,
                 (mock, ctx) -> when(mock.upload()).thenReturn(true));
              MockedConstruction<KafkaPublisher> kp = mockConstruction(KafkaPublisher.class,
                      (mock, ctx) -> {
                          when(mock.isConnected()).thenReturn(true);
+                         when(mock.publishBundle(anyString(), anyString(), any(byte[].class), anyString()))
+                                 .thenReturn(true);
                          when(mock.publishSpec(anyString(), anyString(), anyString(), anyString()))
                                  .thenReturn(true);
                          when(mock.publishStatus(anyString(), anyString())).thenReturn(false);
@@ -414,6 +485,8 @@ class AppTest {
              MockedConstruction<KafkaPublisher> kp = mockConstruction(KafkaPublisher.class,
                      (mock, ctx) -> {
                          when(mock.isConnected()).thenReturn(true);
+                         when(mock.publishBundle(anyString(), anyString(), any(byte[].class), anyString()))
+                                 .thenReturn(true);
                          when(mock.publishSpec(anyString(), anyString(), anyString(), anyString()))
                                  .thenReturn(true);
                          when(mock.publishStatus(anyString(), anyString())).thenReturn(true);
@@ -454,6 +527,8 @@ class AppTest {
              MockedConstruction<KafkaPublisher> kp = mockConstruction(KafkaPublisher.class,
                      (mock, ctx) -> {
                          when(mock.isConnected()).thenReturn(true);
+                         when(mock.publishBundle(anyString(), anyString(), any(byte[].class), anyString()))
+                                 .thenReturn(true);
                          when(mock.publishStatus(anyString(), anyString())).thenReturn(true);
                      })) {
 
@@ -480,6 +555,8 @@ class AppTest {
              MockedConstruction<KafkaPublisher> kp = mockConstruction(KafkaPublisher.class,
                      (mock, ctx) -> {
                          when(mock.isConnected()).thenReturn(true);
+                         when(mock.publishBundle(anyString(), anyString(), any(byte[].class), anyString()))
+                                 .thenReturn(true);
                          when(mock.publishSpec(anyString(), anyString(), anyString(), anyString()))
                                  .thenReturn(true);
                          when(mock.publishStatus(anyString(), anyString()))
