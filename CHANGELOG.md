@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.7] - 2026-07-13
+
+### Fixed
+
+- **Kafka descriptor publish: retry + fail closed (#54, epic controlcenter#111).** Observed live during controlcenter#110 onboarding: a cold producer on a GH runner hit `TimeoutException: Topic ... not present in metadata after 5000 ms`, `KafkaPublisher` logged a warning, the run stayed green — and git-diff change detection never re-processed the file, permanently losing IMDb's ODPS. Now: `max.block.ms` raised 5s → 15s (request 10s, delivery 30s), every send and the connectivity probe retry up to 3 attempts with 2s backoff (`KafkaPublisher.retry`, unit-tested), and a due descriptor publish that still fails — or an unreachable broker when a spec publish is due — fails the run with a non-zero exit so the next run retries the same changed files. The #35 sync-status event stays best-effort.
+
 ## [0.6.6] - 2026-07-12
 
 ### Fixed

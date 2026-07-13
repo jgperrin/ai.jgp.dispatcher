@@ -112,8 +112,9 @@ public class App {
             log.log(Level.SEVERE, "Processing failed for " + productFile, e);
         }
 
-        publishToKafka(config, success ? productFile : null, success, ref, uploadId, error);
-        return success;
+        boolean kafkaOk = publishToKafka(config, success ? productFile : null,
+                success, ref, uploadId, error);
+        return success && kafkaOk;
     }
 
     /**
@@ -154,8 +155,9 @@ public class App {
         String uploadId = client.getLastUploadId();
         String error = success ? null : client.getLastError();
 
-        publishToKafka(config, success ? productFile : null, success, ref, uploadId, error);
-        return success;
+        boolean kafkaOk = publishToKafka(config, success ? productFile : null,
+                success, ref, uploadId, error);
+        return success && kafkaOk;
     }
 
     /**
@@ -187,8 +189,12 @@ public class App {
      *       on <strong>both</strong> success and failure, when the asset has an
      *       ODPS id (#35).</li>
      * </ul>
-     * Best-effort: any failure here is logged and swallowed, never altering the
-     * process exit code. Skipped entirely when Kafka is not configured, or when
+     * The descriptor (spec) publish is <strong>fail-closed</strong> (#54): a
+     * descriptor that cannot be published to Kafka returns false so the run
+     * fails and git-diff change detection re-processes the file on the next
+     * run — a green run can never hide a lost descriptor. The sync-status
+     * event stays best-effort (#35): its failure is logged and swallowed.
+     * Skipped entirely (returning true) when Kafka is not configured, or when
      * there is nothing to publish (no spec and no keyable status event).
      *
      * @param productFile    path to the product's ODPS YAML to publish, or null
@@ -197,12 +203,14 @@ public class App {
      * @param ref            the product's id/version, or null (e.g. pre-built ZIP)
      * @param uploadId       the Zeenea upload id, or null
      * @param error          failure reason, or null on success
+     * @return true when every required publish succeeded (or none was due);
+     *         false when a due descriptor publish failed
      */
-    private static void publishToKafka(CliConfig config, String productFile, boolean uploadSucceeded,
-                                       ProductRef ref, String uploadId, String error) {
+    private static boolean publishToKafka(CliConfig config, String productFile, boolean uploadSucceeded,
+                                          ProductRef ref, String uploadId, String error) {
         if (!config.isKafkaConfigured()) {
             log.fine("Kafka not configured, skipping Kafka publishing");
-            return;
+            return true;
         }
 
         boolean publishSpec = productFile != null && ref != null && ref.hasId();
@@ -212,13 +220,14 @@ public class App {
         boolean publishStatus = ref != null && ref.hasId();
         if (!publishSpec && !publishStatus) {
             log.fine("Nothing to publish to Kafka (no spec, no keyable status event)");
-            return;
+            return true;
         }
 
         System.out.println();
         System.out.println("Publishing to Kafka...");
 
         KafkaPublisher publisher = null;
+        boolean specOk = !publishSpec;
         try {
             publisher = new KafkaPublisher(
                     config.getKafkaBroker(),
@@ -226,12 +235,17 @@ public class App {
                     config.getKafkaPassword());
 
             if (!publisher.isConnected()) {
+                if (publishSpec) {
+                    System.err.println("Error: Kafka broker is not reachable and a descriptor "
+                            + "publish is due — failing the run (fail closed, #54).");
+                    return false;
+                }
                 System.err.println("Warning: Kafka broker is not reachable, skipping Kafka publishing.");
-                return;
+                return true;
             }
 
             if (publishSpec) {
-                publishSpec(publisher, config, ref, productFile);
+                specOk = publishSpec(publisher, config, ref, productFile);
             }
             if (publishStatus) {
                 publishStatus(publisher, config, ref, uploadSucceeded, uploadId, error);
@@ -244,11 +258,16 @@ public class App {
                 publisher.close();
             }
         }
+        if (!specOk) {
+            System.err.println("Error: descriptor publish failed — failing the run "
+                    + "(fail closed, #54) so change detection retries it next run.");
+        }
+        return specOk;
     }
 
     /** Reads the product's ODPS YAML and publishes it to the descriptors topic (#45). */
-    private static void publishSpec(KafkaPublisher publisher, CliConfig config, ProductRef ref,
-                                    String productFile) throws java.io.IOException {
+    private static boolean publishSpec(KafkaPublisher publisher, CliConfig config, ProductRef ref,
+                                       String productFile) throws java.io.IOException {
         String odpsYaml = Files.readString(Path.of(productFile));
 
         boolean ok = publisher.publishSpec(
@@ -259,6 +278,7 @@ public class App {
         } else {
             System.err.println("  Failed to publish ODPS spec to Kafka.");
         }
+        return ok;
     }
 
     /** Builds and publishes the sync-status event to the status topic (#35). */

@@ -35,17 +35,32 @@ public class KafkaPublisher {
 
     private static final Logger log = Logger.getLogger(KafkaPublisher.class.getName());
 
-    private static final long SEND_TIMEOUT_SECONDS = 10;
-    private static final int MAX_BLOCK_MS = 5000;
-    private static final int REQUEST_TIMEOUT_MS = 5000;
-    private static final int DELIVERY_TIMEOUT_MS = 10000;
-    private static final long PROBE_TIMEOUT_SECONDS = 5;
     private static final long CLOSE_TIMEOUT_SECONDS = 2;
 
+    /**
+     * Producer timeouts and the retry budget. Cold-producer metadata fetches
+     * from GH runners routinely exceed 5s (#54: a 5s {@code max.block.ms}
+     * timed out the IMDb descriptor publish behind a green run), so the
+     * production tuning blocks up to 15s per attempt and retries with
+     * backoff. Package-private so tests can inject tiny values and stay fast.
+     */
+    record Tuning(int maxBlockMs, int requestTimeoutMs, int deliveryTimeoutMs,
+                  long sendTimeoutSeconds, long probeTimeoutSeconds,
+                  int attempts, long backoffMs) {
+        static final Tuning PRODUCTION =
+                new Tuning(15000, 10000, 30000, 40, 10, 3, 2000);
+    }
+
+    private final Tuning tuning;
     private final KafkaProducer<String, byte[]> producer;
     private final boolean connected;
 
     public KafkaPublisher(String broker, String user, String password) {
+        this(broker, user, password, Tuning.PRODUCTION);
+    }
+
+    KafkaPublisher(String broker, String user, String password, Tuning tuning) {
+        this.tuning = tuning;
         String authMode = (user != null && password != null)
                 ? "SASL_SSL (SCRAM-SHA-512)"
                 : "PLAINTEXT (no credentials)";
@@ -54,8 +69,9 @@ public class KafkaPublisher {
         System.out.println("       Password: " + (password != null ? "****" : "(not set)"));
         System.out.println("       Auth:     " + authMode);
         System.out.println("       Topic:    " + K.KAFKA_TOPIC_DESCRIPTORS);
-        System.out.println("       Timeout:  " + PROBE_TIMEOUT_SECONDS + "s probe, "
-                + (MAX_BLOCK_MS / 1000) + "s max block");
+        System.out.println("       Timeout:  " + tuning.probeTimeoutSeconds() + "s probe, "
+                + (tuning.maxBlockMs() / 1000) + "s max block, "
+                + tuning.attempts() + " attempts");
 
         Properties props = new Properties();
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, broker);
@@ -63,10 +79,9 @@ public class KafkaPublisher {
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         props.put(ProducerConfig.ACKS_CONFIG, "all");
 
-        // Shorter timeouts for faster failure diagnostics
-        props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, MAX_BLOCK_MS);
-        props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, REQUEST_TIMEOUT_MS);
-        props.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, DELIVERY_TIMEOUT_MS);
+        props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, tuning.maxBlockMs());
+        props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, tuning.requestTimeoutMs());
+        props.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, tuning.deliveryTimeoutMs());
 
         // SASL_SSL + SCRAM-SHA-512
         if (user != null && password != null) {
@@ -96,9 +111,9 @@ public class KafkaPublisher {
             props.put("security.protocol", "PLAINTEXT");
         }
 
-        log.fine("Producer config: max.block.ms=" + MAX_BLOCK_MS
-                + ", request.timeout.ms=" + REQUEST_TIMEOUT_MS
-                + ", delivery.timeout.ms=" + DELIVERY_TIMEOUT_MS);
+        log.fine("Producer config: max.block.ms=" + tuning.maxBlockMs()
+                + ", request.timeout.ms=" + tuning.requestTimeoutMs()
+                + ", delivery.timeout.ms=" + tuning.deliveryTimeoutMs());
 
         // Suppress Kafka's verbose internal logging (config dumps, disconnect spam)
         Logger.getLogger("org.apache.kafka").setLevel(Level.SEVERE);
@@ -106,24 +121,34 @@ public class KafkaPublisher {
         this.producer = new KafkaProducer<>(props);
         log.fine("KafkaProducer created successfully");
 
-        // Probe broker connectivity — forces metadata fetch with a short timeout
-        boolean reachable;
+        // Probe broker connectivity — forces a metadata fetch. Retried (#54):
+        // a cold producer's first metadata fetch from a GH runner routinely
+        // exceeds a single short timeout.
+        this.connected = retry("metadata probe", tuning.attempts(),
+                tuning.backoffMs(), this::probeOnce);
+        if (!connected) {
+            System.err.println("       Probe:    broker unreachable after "
+                    + tuning.attempts() + " attempt(s)");
+        }
+    }
+
+    /** One metadata-fetch attempt against the descriptors topic. */
+    private boolean probeOnce() {
         try {
             CompletableFuture.supplyAsync(() -> producer.partitionsFor(K.KAFKA_TOPIC_DESCRIPTORS))
-                    .get(PROBE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-            reachable = true;
+                    .get(tuning.probeTimeoutSeconds(), TimeUnit.SECONDS);
             log.fine("Kafka broker is reachable");
+            return true;
         } catch (java.util.concurrent.TimeoutException e) {
-            reachable = false;
             System.err.println("       Probe:    broker did not respond within "
-                    + PROBE_TIMEOUT_SECONDS + "s");
+                    + tuning.probeTimeoutSeconds() + "s");
+            return false;
         } catch (Exception e) {
-            reachable = false;
             Throwable cause = e instanceof ExecutionException ? e.getCause() : e;
             System.err.println("       Probe:    " + cause.getClass().getSimpleName()
                     + " — " + cause.getMessage());
+            return false;
         }
-        this.connected = reachable;
     }
 
     public boolean isConnected() {
@@ -180,9 +205,19 @@ public class KafkaPublisher {
     }
 
     private boolean send(ProducerRecord<String, byte[]> record) {
+        // #54: sends are retried — transient metadata timeouts on a cold
+        // producer must not lose a descriptor. The publish is an upsert
+        // downstream, so a duplicate from a retried-but-actually-delivered
+        // send is harmless.
+        return retry("publish to " + record.topic(), tuning.attempts(),
+                tuning.backoffMs(), () -> sendOnce(record));
+    }
+
+    /** One blocking send attempt. */
+    private boolean sendOnce(ProducerRecord<String, byte[]> record) {
         String topic = record.topic();
         try {
-            var metadata = producer.send(record).get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            var metadata = producer.send(record).get(tuning.sendTimeoutSeconds(), TimeUnit.SECONDS);
             log.fine("Published to " + metadata.topic()
                     + " partition " + metadata.partition()
                     + " offset " + metadata.offset());
@@ -193,6 +228,31 @@ public class KafkaPublisher {
             log.log(Level.WARNING, "Kafka send failed for " + topic, cause);
             return false;
         }
+    }
+
+    /**
+     * Runs {@code op} up to {@code attempts} times, sleeping {@code backoffMs}
+     * between failed attempts. Returns true as soon as one attempt succeeds,
+     * false when the budget is exhausted (#54).
+     */
+    static boolean retry(String what, int attempts, long backoffMs,
+                         java.util.function.BooleanSupplier op) {
+        for (int attempt = 1; attempt <= attempts; attempt++) {
+            if (op.getAsBoolean()) {
+                return true;
+            }
+            if (attempt < attempts) {
+                System.err.println("  Retrying " + what + " (attempt "
+                        + (attempt + 1) + "/" + attempts + ")...");
+                try {
+                    Thread.sleep(backoffMs);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                }
+            }
+        }
+        return false;
     }
 
     /**

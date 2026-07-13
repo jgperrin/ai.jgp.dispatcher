@@ -201,7 +201,7 @@ class AppTest {
     }
 
     @Test
-    void main_kafkaPublisherNotConnected_skipsPublishingButExitsZero() throws Exception {
+    void main_kafkaPublisherNotConnected_specDue_failsClosed_exitsOne() throws Exception {
         try (MockedConstruction<ZeeneaClient> zc = mockConstruction(ZeeneaClient.class,
                 (mock, ctx) -> when(mock.upload()).thenReturn(true));
              MockedConstruction<KafkaPublisher> kp = mockConstruction(KafkaPublisher.class,
@@ -209,12 +209,14 @@ class AppTest {
 
             int code = SystemStubs.catchSystemExit(() -> App.main(kafkaArgs(productYaml())));
 
-            assertEquals(0, code);
+            // #54: an unpublished descriptor must fail the run — change
+            // detection would otherwise never retry it.
+            assertEquals(1, code);
         }
     }
 
     @Test
-    void main_kafkaPublisherThrows_failureIsSwallowed_exitsZero() throws Exception {
+    void main_kafkaPublisherThrows_specDue_failsClosed_exitsOne() throws Exception {
         try (MockedConstruction<ZeeneaClient> zc = mockConstruction(ZeeneaClient.class,
                 (mock, ctx) -> when(mock.upload()).thenReturn(true));
              MockedConstruction<KafkaPublisher> kp = mockConstruction(KafkaPublisher.class,
@@ -226,7 +228,46 @@ class AppTest {
 
             int code = SystemStubs.catchSystemExit(() -> App.main(kafkaArgs(productYaml())));
 
-            // Kafka failures don't fail the overall upload.
+            // #54: a spec publish crash fails the run (fail closed).
+            assertEquals(1, code);
+        }
+    }
+
+    @Test
+    void main_specPublishReturnsFalse_failsClosed_exitsOne() throws Exception {
+        try (MockedConstruction<ZeeneaClient> zc = mockConstruction(ZeeneaClient.class,
+                (mock, ctx) -> when(mock.upload()).thenReturn(true));
+             MockedConstruction<KafkaPublisher> kp = mockConstruction(KafkaPublisher.class,
+                     (mock, ctx) -> {
+                         when(mock.isConnected()).thenReturn(true);
+                         when(mock.publishSpec(anyString(), anyString(), anyString(), anyString()))
+                                 .thenReturn(false);
+                         when(mock.publishStatus(anyString(), anyString())).thenReturn(true);
+                     })) {
+
+            int code = SystemStubs.catchSystemExit(() -> App.main(kafkaArgs(productYaml())));
+
+            // #54: a failed descriptor publish can never hide behind a green run.
+            assertEquals(1, code);
+        }
+    }
+
+    @Test
+    void main_statusPublishFails_specSucceeds_staysBestEffort_exitsZero() throws Exception {
+        try (MockedConstruction<ZeeneaClient> zc = mockConstruction(ZeeneaClient.class,
+                (mock, ctx) -> when(mock.upload()).thenReturn(true));
+             MockedConstruction<KafkaPublisher> kp = mockConstruction(KafkaPublisher.class,
+                     (mock, ctx) -> {
+                         when(mock.isConnected()).thenReturn(true);
+                         when(mock.publishSpec(anyString(), anyString(), anyString(), anyString()))
+                                 .thenReturn(true);
+                         when(mock.publishStatus(anyString(), anyString())).thenReturn(false);
+                     })) {
+
+            int code = SystemStubs.catchSystemExit(() -> App.main(kafkaArgs(productYaml())));
+
+            // The #35 sync-status event stays best-effort — only the
+            // descriptor publish is fail-closed (#54).
             assertEquals(0, code);
         }
     }
