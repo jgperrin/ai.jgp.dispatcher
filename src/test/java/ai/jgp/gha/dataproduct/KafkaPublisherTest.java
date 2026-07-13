@@ -96,6 +96,40 @@ class KafkaPublisherTest {
         }
     }
 
+    // --- #55 bundle record shape ---------------------------------------------
+
+    @Test
+    void bundleRecord_carriesKeyOrgAndKindHeaders_andZipRoundTrips() throws Exception {
+        // Build a tiny real ZIP so the value bytes can round-trip.
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        try (java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(bos)) {
+            zos.putNextEntry(new java.util.zip.ZipEntry("podem/my-product.odps.yaml"));
+            zos.write("id: my-product\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            zos.closeEntry();
+        }
+        byte[] zip = bos.toByteArray();
+        String orgId = "3f2b8c1e-9a4d-4e7f-b6a5-1c2d3e4f5a6b";
+
+        var record = KafkaPublisher.buildBundleRecord(
+                K.KAFKA_TOPIC_BUNDLES, "my-product", zip, orgId);
+
+        assertEquals(K.KAFKA_TOPIC_BUNDLES, record.topic());
+        assertEquals("my-product", record.key());
+        assertEquals(orgId, new String(record.headers().lastHeader(K.KAFKA_HEADER_ORG_ID).value(),
+                java.nio.charset.StandardCharsets.UTF_8));
+        assertEquals(K.BUNDLE_KIND, new String(record.headers().lastHeader(K.KAFKA_HEADER_KIND).value(),
+                java.nio.charset.StandardCharsets.UTF_8));
+
+        // The record value is the exact ZIP — it unzips back to the entry.
+        try (java.util.zip.ZipInputStream zis = new java.util.zip.ZipInputStream(
+                new java.io.ByteArrayInputStream(record.value()))) {
+            java.util.zip.ZipEntry entry = zis.getNextEntry();
+            assertEquals("podem/my-product.odps.yaml", entry.getName());
+            assertEquals("id: my-product\n", new String(zis.readAllBytes(),
+                    java.nio.charset.StandardCharsets.UTF_8));
+        }
+    }
+
     // --- #54 retry budget ---------------------------------------------------
 
     @Test
