@@ -6,7 +6,7 @@
 
     <groupId>ai.jgp.gha</groupId>
     <artifactId>data-product-uploader</artifactId>
-    <version>0.6.8</version>
+    <version>0.6.9</version>
     <packaging>jar</packaging>
 
     <name>Data Product Uploader</name>

@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.9] - 2026-07-14
+
+### Fixed
+
+- **ZipBuilder bundles contracts published under name-based canonicalUrls (#52, epic controlcenter#99).** `ZipBuilder` resolved a referenced contract strictly at `<productDir>/<contractId>.odcs.yaml` — both for `git show <tag>:<path>` and the local-file fallback. The Workbench publishes each contract wherever its `canonicalUrl` points (usually a human-readable name), so tagged contracts sitting at a name-based path were silently skipped and Zeenea rejected the product with “no matching data contract” (the epic E2E worked around it by publishing as `<contractId>.odcs.yaml`). Now, when the conventional path misses, the tagged content is resolved by listing the tag’s tree (`git ls-tree -r --full-tree <tag>`) and picking the `*.odcs.yaml` whose YAML `id:` matches the referenced contract id; the local-file fallback does the same via a directory scan. The conventional `<contractId>.odcs.yaml` fast path is unchanged, and an ambiguous id (two files declaring the same contract id) now fails loudly, naming both offenders. Also hardened `resolveRelativeDir` to canonicalise symlinked paths (macOS `/var` vs `/private/var`) so the fast path resolves correctly. New unit tests stand up a real temporary git repo to cover tag-tree and local-scan resolution plus both ambiguity cases.
+
 ## [0.6.8] - 2026-07-13
 
 ### Added

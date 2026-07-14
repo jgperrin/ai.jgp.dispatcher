@@ -97,19 +97,41 @@ public class ZipBuilder {
                     String tag = "contract-" + contractId + "-v" + portVersion;
                     String gitPath = relativeDir + "/" + contractId + ".odcs.yaml";
 
-                    // Try to retrieve the contract at the tagged version
-                    byte[] contractBytes = gitShow(tag, gitPath);
+                    // 1. Conventional fast path: the contract lives at
+                    //    <dir>/<contractId>.odcs.yaml inside the tag.
+                    byte[] contractBytes = gitShow(tag, gitPath, dir);
+
+                    // 2. Name-based canonicalUrl (#52): the Workbench publishes a
+                    //    contract wherever its canonicalUrl points — usually a
+                    //    human-readable name, not "<contractId>.odcs.yaml". List
+                    //    the tag's tree and pick the *.odcs.yaml whose YAML id
+                    //    matches the referenced contract id.
                     if (contractBytes == null) {
-                        // Fall back to the current file on disk
+                        contractBytes = resolveFromTagTree(tag, contractId, dir);
+                        if (contractBytes != null) {
+                            System.out.println("  (resolved '" + contractId
+                                    + "' by matching id in the tag tree — name-based path)");
+                        }
+                    }
+
+                    // 3. Local-file fallbacks (no usable tag): conventional path
+                    //    first, then a directory scan matching the id.
+                    if (contractBytes == null) {
                         Path contractPath = dir.resolve(contractId + ".odcs.yaml");
                         if (Files.exists(contractPath)) {
                             contractBytes = Files.readAllBytes(contractPath);
                             System.err.println("  Warning: tag '" + tag + "' not found, "
                                     + "using current file for " + contractId);
                         } else {
-                            System.err.println("  Warning: contract not found for " + contractId
-                                    + " (no tag '" + tag + "', no local file)");
-                            continue;
+                            contractBytes = resolveFromLocalScan(dir, contractId);
+                            if (contractBytes != null) {
+                                System.err.println("  Warning: tag '" + tag + "' not found, "
+                                        + "using name-based local file for " + contractId);
+                            } else {
+                                System.err.println("  Warning: contract not found for " + contractId
+                                        + " (no tag '" + tag + "', no local file)");
+                                continue;
+                            }
                         }
                     }
 
@@ -158,15 +180,32 @@ public class ZipBuilder {
     }
 
     /**
-     * Retrieves file content at a specific git tag using {@code git show}.
+     * Retrieves file content at a specific git tag using {@code git show},
+     * running git in the current process directory.
      *
      * @param tag  the git tag (e.g. "contract-a7403a03-...-v1.0.4")
      * @param path the file path relative to the repo root
      * @return file content as bytes, or null if the tag/file doesn't exist
      */
     static byte[] gitShow(String tag, String path) {
+        return gitShow(tag, path, null);
+    }
+
+    /**
+     * Retrieves file content at a specific git tag using {@code git show},
+     * running git in {@code workDir} (or the process directory when null).
+     *
+     * @param tag     the git tag (e.g. "contract-a7403a03-...-v1.0.4")
+     * @param path    the file path relative to the repo root
+     * @param workDir directory to run git in, or null for the process cwd
+     * @return file content as bytes, or null if the tag/file doesn't exist
+     */
+    static byte[] gitShow(String tag, String path, Path workDir) {
         try {
             ProcessBuilder pb = new ProcessBuilder("git", "show", tag + ":" + path);
+            if (workDir != null) {
+                pb.directory(workDir.toFile());
+            }
             pb.redirectErrorStream(false);
             Process process = pb.start();
 
@@ -198,6 +237,139 @@ public class ZipBuilder {
     }
 
     /**
+     * Resolves a contract that was tagged under a name-based path (#52). Lists
+     * every file in the tag's tree ({@code git ls-tree -r <tag> --name-only}),
+     * and among the {@code *.odcs.yaml} files returns the one whose YAML
+     * {@code id:} equals {@code contractId}.
+     *
+     * <p>The conventional {@code <contractId>.odcs.yaml} fast path is tried by
+     * the caller first; this is the fallback for contracts published wherever
+     * their {@code canonicalUrl} points (usually a human-readable name).
+     *
+     * @param tag        the contract tag (e.g. {@code contract-<id>-v1.0.0})
+     * @param contractId the referenced contract id to match
+     * @param workDir    directory to run git in (inside the repo), or null
+     * @return the matching contract bytes, or null if the tag or a match is absent
+     * @throws IOException if two files in the tag tree declare the same id
+     */
+    static byte[] resolveFromTagTree(String tag, String contractId, Path workDir)
+            throws IOException {
+        List<String> paths = gitLsTree(tag, workDir);
+        String matchPath = null;
+        byte[] matchBytes = null;
+        for (String path : paths) {
+            if (!path.endsWith(".odcs.yaml")) {
+                continue;
+            }
+            byte[] bytes = gitShow(tag, path, workDir);
+            if (bytes == null || !contractId.equals(yamlId(bytes))) {
+                continue;
+            }
+            if (matchPath != null) {
+                throw new IOException("Ambiguous contract id '" + contractId
+                        + "' at tag '" + tag + "': matched both '" + matchPath
+                        + "' and '" + path + "' — cannot decide which to bundle");
+            }
+            matchPath = path;
+            matchBytes = bytes;
+        }
+        return matchBytes;
+    }
+
+    /**
+     * Resolves a name-based contract file on disk (#52) when no usable git tag
+     * exists. Scans {@code dir} for {@code *.odcs.yaml} files and returns the one
+     * whose YAML {@code id:} equals {@code contractId}.
+     *
+     * @param dir        the directory holding the product and its contracts
+     * @param contractId the referenced contract id to match
+     * @return the matching contract bytes, or null if no file matches
+     * @throws IOException if two files in the directory declare the same id
+     */
+    static byte[] resolveFromLocalScan(Path dir, String contractId) throws IOException {
+        if (dir == null || !Files.isDirectory(dir)) {
+            return null;
+        }
+        Path matchPath = null;
+        byte[] matchBytes = null;
+        try (var stream = Files.list(dir)) {
+            List<Path> candidates = stream
+                    .filter(p -> p.getFileName().toString().endsWith(".odcs.yaml"))
+                    .sorted()
+                    .collect(Collectors.toList());
+            for (Path p : candidates) {
+                byte[] bytes = Files.readAllBytes(p);
+                if (!contractId.equals(yamlId(bytes))) {
+                    continue;
+                }
+                if (matchPath != null) {
+                    throw new IOException("Ambiguous contract id '" + contractId
+                            + "' in '" + dir + "': matched both '"
+                            + matchPath.getFileName() + "' and '" + p.getFileName()
+                            + "' — cannot decide which to bundle");
+                }
+                matchPath = p;
+                matchBytes = bytes;
+            }
+        }
+        return matchBytes;
+    }
+
+    /**
+     * Lists the files in a tag's tree via {@code git ls-tree -r <tag> --name-only}.
+     *
+     * @param tag     the git tag
+     * @param workDir directory to run git in, or null for the process cwd
+     * @return the file paths in the tag (empty if the tag is missing)
+     */
+    static List<String> gitLsTree(String tag, Path workDir) {
+        List<String> out = new ArrayList<>();
+        try {
+            // --full-tree makes ls-tree operate from the repo root and emit
+            // repo-root-relative paths regardless of the working directory, so
+            // the paths line up with what `git show <tag>:<path>` expects.
+            ProcessBuilder pb = new ProcessBuilder(
+                    "git", "ls-tree", "-r", "--full-tree", tag, "--name-only");
+            if (workDir != null) {
+                pb.directory(workDir.toFile());
+            }
+            pb.redirectErrorStream(false);
+            Process process = pb.start();
+            try (var reader = new BufferedReader(new InputStreamReader(
+                    process.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (!line.isBlank()) {
+                        out.add(line);
+                    }
+                }
+            }
+            try (var es = process.getErrorStream();
+                 var reader = new BufferedReader(new InputStreamReader(es))) {
+                reader.lines().collect(Collectors.joining("\n"));
+            }
+            process.waitFor();
+        } catch (Exception e) {
+            log.fine("git ls-tree failed for " + tag + ": " + e.getMessage());
+        }
+        return out;
+    }
+
+    /**
+     * Extracts the top-level {@code id} field from a YAML payload, or null if it
+     * cannot be parsed.
+     */
+    private static String yamlId(byte[] yaml) {
+        try {
+            JsonNode node = new YAMLMapper().readTree(yaml);
+            JsonNode id = node == null ? null : node.get("id");
+            return id == null || id.isNull() ? null : id.asText();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
      * Resolves the directory of the product file relative to the git repo root.
      * Uses {@code git rev-parse --show-toplevel} to find the repo root.
      */
@@ -215,7 +387,15 @@ public class ZipBuilder {
             process.waitFor();
 
             if (repoRoot != null) {
-                Path relativePath = Path.of(repoRoot).relativize(absDir);
+                // Canonicalise both sides before relativising: git reports the
+                // real path (e.g. /private/var/... on macOS) while absDir may be
+                // a symlinked alias (/var/...). Without this they share no common
+                // prefix and relativize() yields a bogus ../../ path, so the
+                // conventional git-tag fast path misses. Best-effort — fall back
+                // to the raw paths if either cannot be canonicalised.
+                Path root = toReal(Path.of(repoRoot));
+                Path leaf = toReal(absDir);
+                Path relativePath = root.relativize(leaf);
                 String rel = relativePath.toString();
                 log.fine("Repo root: " + repoRoot + ", relative dir: " + rel);
                 return rel.isEmpty() ? "." : rel;
@@ -224,6 +404,15 @@ public class ZipBuilder {
             log.fine("Failed to resolve git repo root: " + e.getMessage());
         }
         return "podem";
+    }
+
+    /** Canonicalises a path, returning it unchanged if the real path can't be read. */
+    private static Path toReal(Path p) {
+        try {
+            return p.toRealPath();
+        } catch (IOException e) {
+            return p;
+        }
     }
 
     private static void addEntry(ZipOutputStream zos, String name, byte[] data)
