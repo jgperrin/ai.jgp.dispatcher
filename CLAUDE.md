@@ -8,13 +8,13 @@ Java CLI tool designed to run as a GitHub Action. Uploads data product specs (`.
 
 ## Cross-Project Documentation
 
-Documents that span multiple projects live in `doc/` in the Bitol Services repo (`ai.jgp.bitol.svc`). Documents that pertain to only this project stay here.
+Documents that span multiple projects live in `doc/` in the Libot Services repo (`ai.jgp.bitol.svc`). Documents that pertain to only this project stay here.
 
 ## Related Projects
 
 | Project                                 | Repo                                    | Description                                                              |
 |-----------------------------------------|-----------------------------------------|--------------------------------------------------------------------------|
-| **Bitol Services**                      | `ai.jgp.bitol.svc`                     | Spring Boot REST API — contracts, products, users, GitHub publishing, maturity assessment |
+| **Libot Services**                      | `ai.jgp.bitol.svc`                     | Spring Boot REST API — contracts, products, users, GitHub publishing, maturity assessment |
 | **Workbench Web App**                   | `ai.jgp.data-product-workbench`        | React/Vite web UI for editing contracts and products                     |
 | **Workbench iPhone App**                | `ai.jgp.data-product-workbench-app`    | Native iOS companion app (read-only viewer)                              |
 | **Control Center UI**                   | `ai.jgp.data-product-control-center`   | React front end for the Data Product Control Center                      |
