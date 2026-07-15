@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.11] - 2026-07-15
+
+### Fixed
+
+- **Flat products with subfoldered contracts upload green (#58).** The `entertainment-news` publish writes the product flat into `podem/` while its contract lives in the canonical `podem/entnews/` — the exact tag-tree half of this was already fixed by the #52 by-id resolution (v0.6.9); this completes it: the local-file fallback now scans recursively (`Files.walk`, duplicate ids across subfolders still fail loudly as ambiguous), and the not-found warning finally distinguishes a **missing tag** from a **present tag that carries no `*.odcs.yaml` with the referenced id at any path** (the old message blamed the tag and sent debugging in the wrong direction). Tests: entnews-shaped tag-tree and working-tree cases plus a cross-subfolder ambiguity case, on real temp git repos.
+
 ## [0.6.10] - 2026-07-15
 
 ### Fixed
