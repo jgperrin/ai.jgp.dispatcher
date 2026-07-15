@@ -311,6 +311,90 @@ class ZipBuilderTest {
                 "packaged contract should carry the product's exact version reference");
     }
 
+    // ── #58: flat product, subfoldered contract (podem/ vs podem/entnews/) ──
+
+    /**
+     * #58 AC-2 (tag tree): the publish flow re-creates the product FLAT in
+     * {@code podem/} while its contract lives in the canonical per-product
+     * subfolder ({@code podem/entnews/}). The tag-tree resolution must find the
+     * contract at ANY path inside the tag.
+     */
+    @Test
+    void buildFromProduct_subfolderedContract_resolvesFromTagTree() throws IOException, InterruptedException {
+        Path repo = tmp.resolve("repo58tag");
+        Path podem = repo.resolve("podem");
+        Path sub = podem.resolve("entnews");
+        Files.createDirectories(sub);
+
+        Path contract = sub.resolve("entertainment-news.odcs.yaml");
+        Files.writeString(contract, "id: c-sub-1\nversion: 0.1.0\nname: Entertainment News\n");
+        Path product = podem.resolve("product.odps.yaml");
+        Files.writeString(product, String.join("\n",
+                "id: prod-flat",
+                "version: v1.0.1",
+                "outputPorts:",
+                "  - name: p1",
+                "    contractId: c-sub-1",
+                "    version: v0.1.0",
+                ""));
+
+        initCommitTag(repo, "contract-c-sub-1-v0.1.0");
+        // Remove the working-tree contract so only the tag tree can resolve it.
+        Files.delete(contract);
+
+        Path zip = ZipBuilder.buildFromProduct(product.toString());
+        Map<String, byte[]> entries = readZip(zip);
+
+        assertTrue(entries.containsKey("c-sub-1-v0.1.0.odcs.yaml"),
+                "subfoldered contract should be resolved from the tag tree, got " + entries.keySet());
+    }
+
+    /**
+     * #58 AC-2 (working tree): with no usable tag, the local scan must walk
+     * subdirectories — {@code podem/entnews/} — not just the product's own
+     * directory.
+     */
+    @Test
+    void buildFromProduct_subfolderedContract_resolvesFromLocalScan() throws IOException, InterruptedException {
+        Path repo = tmp.resolve("repo58local");
+        Path podem = repo.resolve("podem");
+        Path sub = podem.resolve("entnews");
+        Files.createDirectories(sub);
+
+        Files.writeString(sub.resolve("entertainment-news.odcs.yaml"),
+                "id: c-sub-2\nversion: 1.1.0\nname: Entertainment News\n");
+        Path product = podem.resolve("product.odps.yaml");
+        Files.writeString(product, String.join("\n",
+                "id: prod-flat2",
+                "version: v1.0.1",
+                "outputPorts:",
+                "  - name: p1",
+                "    contractId: c-sub-2",
+                "    version: v1.1.0",
+                ""));
+        // Real repo, but no contract tag: forces the local-scan fallback.
+        initCommitTag(repo, "unrelated-tag");
+
+        Path zip = ZipBuilder.buildFromProduct(product.toString());
+        Map<String, byte[]> entries = readZip(zip);
+
+        assertTrue(entries.containsKey("c-sub-2-v1.1.0.odcs.yaml"),
+                "subfoldered contract should be found by the recursive local scan, got " + entries.keySet());
+    }
+
+    /** #58: duplicate copies of the same contract id across subfolders fail loudly. */
+    @Test
+    void resolveFromLocalScan_duplicateAcrossSubfolders_throwsAmbiguity() throws IOException {
+        Path dir = tmp.resolve("dup58");
+        Files.createDirectories(dir.resolve("entnews"));
+        Files.writeString(dir.resolve("copy-a.odcs.yaml"), "id: c-dup\nversion: 1.0.0\n");
+        Files.writeString(dir.resolve("entnews").resolve("copy-b.odcs.yaml"), "id: c-dup\nversion: 2.0.0\n");
+
+        IOException ex = org.junit.jupiter.api.Assertions.assertThrows(IOException.class,
+                () -> ZipBuilder.resolveFromLocalScan(dir, "c-dup"));
+        assertTrue(ex.getMessage().contains("Ambiguous"), ex.getMessage());
+    }
+
     // ── #52: name-based canonicalUrl resolution ───────────────────────────
     //
     // The Workbench publishes contracts wherever their canonicalUrl points —

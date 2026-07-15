@@ -128,8 +128,16 @@ public class ZipBuilder {
                                 System.err.println("  Warning: tag '" + tag + "' not found, "
                                         + "using name-based local file for " + contractId);
                             } else {
+                                // #58 — say precisely which half failed: a
+                                // present-but-pathless tag reads very
+                                // differently from a missing tag.
+                                boolean tagPresent = !gitLsTree(tag, dir).isEmpty();
                                 System.err.println("  Warning: contract not found for " + contractId
-                                        + " (no tag '" + tag + "', no local file)");
+                                        + (tagPresent
+                                            ? " (tag '" + tag + "' exists but carries no"
+                                                + " *.odcs.yaml with that id at any path;"
+                                                + " no local file either)"
+                                            : " (no tag '" + tag + "', no local file)"));
                                 continue;
                             }
                         }
@@ -292,8 +300,12 @@ public class ZipBuilder {
         }
         Path matchPath = null;
         byte[] matchBytes = null;
-        try (var stream = Files.list(dir)) {
+        // Recursive (#58): a product published flat can reference a contract
+        // kept in a per-product subfolder (podem/ vs podem/entnews/), so the
+        // scan walks the whole directory tree, not just its top level.
+        try (var stream = Files.walk(dir)) {
             List<Path> candidates = stream
+                    .filter(Files::isRegularFile)
                     .filter(p -> p.getFileName().toString().endsWith(".odcs.yaml"))
                     .sorted()
                     .collect(Collectors.toList());
@@ -305,7 +317,7 @@ public class ZipBuilder {
                 if (matchPath != null) {
                     throw new IOException("Ambiguous contract id '" + contractId
                             + "' in '" + dir + "': matched both '"
-                            + matchPath.getFileName() + "' and '" + p.getFileName()
+                            + dir.relativize(matchPath) + "' and '" + dir.relativize(p)
                             + "' — cannot decide which to bundle");
                 }
                 matchPath = p;
