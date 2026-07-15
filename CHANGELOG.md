@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.10] - 2026-07-15
+
+### Fixed
+
+- **Deleting a product file no longer crashes the run (#59).** `findChangedProducts` collected the last commit's changes without a `--diff-filter`, so a deleted `.odps.yaml` was listed and then `Files.readString` blew up with `NoSuchFileException`, failing the whole `upload-data-products` workflow — even though a deletion is a valid change. The diff now excludes deletions (`--diff-filter=ACMRT`), and a belt-and-braces existence check skips (and logs `deleted — skipped`) any listed path that is gone from the working tree by read time. Unit test stands up a temp git repo with a modify+delete commit and asserts only the modified product surfaces.
+
 ## [0.6.9] - 2026-07-14
 
 ### Fixed

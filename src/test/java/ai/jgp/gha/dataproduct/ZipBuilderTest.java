@@ -175,6 +175,34 @@ class ZipBuilderTest {
         assertTrue(entries.containsKey("prod-3-v0.1.0.odps.yaml"));
     }
 
+    /**
+     * #59 — a commit that deletes a product file must not surface the deleted
+     * path (it no longer exists on disk; processing it crashed the run with
+     * NoSuchFileException). Modified files still surface.
+     */
+    @Test
+    void findChangedProducts_excludesDeletions() throws Exception {
+        Path repo = tmp.resolve("repo59");
+        Files.createDirectories(repo.resolve("podem"));
+        Files.writeString(repo.resolve("podem/keep.odps.yaml"), "id: keep\nversion: 0.1.0\n");
+        Files.writeString(repo.resolve("podem/gone.odps.yaml"), "id: gone\nversion: 0.1.0\n");
+        git(repo, "init", "-q");
+        git(repo, "config", "user.email", "test@example.com");
+        git(repo, "config", "user.name", "Test");
+        git(repo, "add", "-A");
+        git(repo, "commit", "-q", "-m", "initial");
+
+        Files.writeString(repo.resolve("podem/keep.odps.yaml"), "id: keep\nversion: 0.2.0\n");
+        Files.delete(repo.resolve("podem/gone.odps.yaml"));
+        git(repo, "add", "-A");
+        git(repo, "commit", "-q", "-m", "modify keep, delete gone");
+
+        List<String> changed = ZipBuilder.findChangedProducts("podem", repo);
+
+        assertEquals(List.of("podem/keep.odps.yaml"), changed,
+                "deleted product must be skipped, modified product must surface");
+    }
+
     @Test
     void findChangedProducts_returnsEmpty_onNonGitDirectory() {
         // tmp is not a git repo, so `git diff` fails and the method
