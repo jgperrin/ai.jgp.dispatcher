@@ -426,19 +426,33 @@ public class ZipBuilder {
      * Finds .odps.yaml product files changed in the last commit within the
      * given directory, using {@code git diff --name-only HEAD~1 HEAD}.
      *
+     * <p>Deletions are excluded ({@code --diff-filter=ACMRT}, #59): a deleted
+     * product file no longer exists on disk, so processing it can only crash.
+     * A belt-and-braces existence check below guards against any other way a
+     * listed path can be gone by the time it is read.
+     *
      * @param dirPath directory to scan (e.g. "podem")
      * @return list of paths to changed product files (may be empty)
      */
     public static List<String> findChangedProducts(String dirPath) {
+        return findChangedProducts(dirPath, null);
+    }
+
+    /** Test seam: like {@link #findChangedProducts(String)} but running git in {@code workDir}. */
+    static List<String> findChangedProducts(String dirPath, Path workDir) {
         List<String> changed = new ArrayList<>();
         try {
             // Get all changed files under the directory, filter by extension in Java.
             // Using just the directory path avoids glob issues with ProcessBuilder.
             List<String> cmd = List.of(
-                    "git", "diff", "--name-only", "HEAD~1", "HEAD", "--", dirPath);
+                    "git", "diff", "--name-only", "--diff-filter=ACMRT",
+                    "HEAD~1", "HEAD", "--", dirPath);
             System.out.println("Running: " + String.join(" ", cmd));
 
             ProcessBuilder pb = new ProcessBuilder(cmd);
+            if (workDir != null) {
+                pb.directory(workDir.toFile());
+            }
             pb.redirectErrorStream(false);
             Process process = pb.start();
 
@@ -467,9 +481,17 @@ public class ZipBuilder {
 
             for (String file : allChanged) {
                 System.out.println("  changed: " + file);
-                if (file.endsWith(".odps.yaml")) {
-                    changed.add(file);
+                if (!file.endsWith(".odps.yaml")) {
+                    continue;
                 }
+                // #59 — guard for paths gone from the working tree anyway
+                // (racy checkout states, odd renames): skip, don't crash.
+                Path onDisk = workDir != null ? workDir.resolve(file) : Path.of(file);
+                if (!Files.exists(onDisk)) {
+                    System.out.println("  deleted — skipped: " + file);
+                    continue;
+                }
+                changed.add(file);
             }
 
             if (!changed.isEmpty()) {
