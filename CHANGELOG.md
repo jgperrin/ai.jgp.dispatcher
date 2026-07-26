@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.12] - 2026-07-26
+
+### Fixed
+
+- **Products whose output ports share one contract upload green (#64).** The CommBank AML product declares three output ports all backed by the same gold ODCS contract — a legitimate ODPS pattern — and `ZipBuilder` added `{contractId}-v{version}.odcs.yaml` once per port, so the second port crashed the whole run with `ZipException: duplicate entry` (no Zeenea upload, no Kafka descriptors, sync-status failed). The bundle now tracks added contract entries and packages each contract exactly once, logging port-level reuse at FINE. Test: three-ports-one-contract case asserting a single contract entry.
+
 ## [0.6.11] - 2026-07-15
 
 ### Fixed
