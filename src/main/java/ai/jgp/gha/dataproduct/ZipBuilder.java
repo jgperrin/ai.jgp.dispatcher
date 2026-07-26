@@ -72,7 +72,10 @@ public class ZipBuilder {
             addEntry(zos, productEntry, productContent.getBytes(StandardCharsets.UTF_8));
             System.out.println("  + " + productEntry);
 
-            // 2. Add contracts from output ports
+            // 2. Add contracts from output ports. Several ports may reference
+            //    the same contractId+version (one gold contract covering many
+            //    tables, #64) — the ZIP must carry that contract exactly once.
+            java.util.Set<String> addedContracts = new java.util.HashSet<>();
             JsonNode outputPorts = root.path("outputPorts");
             if (outputPorts.isArray()) {
                 for (JsonNode port : outputPorts) {
@@ -89,6 +92,13 @@ public class ZipBuilder {
                     }
                     if (portVersion == null || portVersion.isEmpty()) {
                         log.fine("Skipping output port '" + portName + "' — no version");
+                        continue;
+                    }
+
+                    String contractEntry = contractId + "-v" + portVersion + ".odcs.yaml";
+                    if (!addedContracts.add(contractEntry)) {
+                        log.fine("Output port '" + portName + "' reuses " + contractEntry
+                                + " — already in the ZIP");
                         continue;
                     }
 
@@ -150,7 +160,6 @@ public class ZipBuilder {
                     contractBytes = normalizeContractVersion(
                             contractBytes, portVersionNode.asText(), contractId);
 
-                    String contractEntry = contractId + "-v" + portVersion + ".odcs.yaml";
                     addEntry(zos, contractEntry, contractBytes);
                     System.out.println("  + " + contractEntry + " (from output port '" + portName
                             + "', tag: " + tag + ")");

@@ -139,6 +139,41 @@ class ZipBuilderTest {
     }
 
     @Test
+    void buildFromProduct_addsSharedContractOnce_whenPortsReferenceSameContract() throws IOException {
+        // Three output ports referencing the same contractId+version (one gold
+        // contract covering several tables, #64) — the ZIP must contain the
+        // contract exactly once instead of failing on a duplicate entry.
+        Path productFile = tmp.resolve("product.odps.yaml");
+        Path contractFile = tmp.resolve("c1.odcs.yaml");
+        Files.writeString(contractFile, "id: c1\nversion: 1.0.0");
+        Files.writeString(productFile, String.join("\n",
+                "id: prod-shared",
+                "version: v2.0.0",
+                "outputPorts:",
+                "  - name: p1",
+                "    contractId: c1",
+                "    version: 1.0.0",
+                "  - name: p2",
+                "    contractId: c1",
+                "    version: 1.0.0",
+                "  - name: p3",
+                "    contractId: c1",
+                "    version: 1.0.0",
+                ""));
+
+        Path zip = ZipBuilder.buildFromProduct(productFile.toString());
+
+        assertNotNull(zip);
+        Map<String, byte[]> entries = readZip(zip);
+        assertTrue(entries.containsKey("prod-shared-v2.0.0.odps.yaml"),
+                "expected product entry, got " + entries.keySet());
+        assertTrue(entries.containsKey("c1-v1.0.0.odcs.yaml"),
+                "expected contract entry, got " + entries.keySet());
+        assertEquals(2, entries.size(),
+                "expected exactly product + one shared contract, got " + entries.keySet());
+    }
+
+    @Test
     void buildFromProduct_skipsPortsWithoutContractId() throws IOException {
         Path productFile = tmp.resolve("product.odps.yaml");
         Files.writeString(productFile, String.join("\n",
