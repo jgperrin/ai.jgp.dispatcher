@@ -38,7 +38,7 @@ jobs:
           path: uploader
 
       - name: Build uploader
-        run: mvn -q -f uploader/pom.xml clean package
+        run: mvn -q -f uploader/pom.xml -DskipTests clean package
 
       # 4. Upload changed products (git diff + smart ZIP building handled in Java)
       - name: Upload changed products

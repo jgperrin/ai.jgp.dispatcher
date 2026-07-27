@@ -1,0 +1,23 @@
+# #72 — the uploader's own test gate. Before this, the suite only ran inside
+# consumer repos' publish workflows, spraying test-fixture errors into their
+# logs; consumers now build the jar with -DskipTests and rely on this.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Build and test
+        run: mvn -ntp verify

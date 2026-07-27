@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.2] - 2026-07-27
+
+### Added
+
+- **Own CI; consumers build quietly (#72).** The repo now runs `mvn verify` on push/PR (`.github/workflows/ci.yml`) — previously the 134-test suite only executed inside consumer repos' publish workflows, spraying test-fixture errors ("kafka down", fake `my-product` publishes, AppTest stack traces) into every publish log and repeatedly reading as real failures. The `upload-data-products.yml` template (and the live cba workflow) now builds the jar with `-DskipTests`.
+
 ## [0.7.1] - 2026-07-27
 
 ### Fixed
