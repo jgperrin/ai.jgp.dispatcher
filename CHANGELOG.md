@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-07-27
+
+### Fixed
+
+- **networknt UnknownKeyword WARNING flood silenced (#70).** Loading the vendored ODCS schema logged ~36 `Unknown keyword ApiServer/AthenaServer/…` WARNING lines per run — the schema's named server-type definitions are irrelevant for validation but the default keyword factory warns on each. `SchemaValidator` now pins the `com.networknt.schema.UnknownKeywordFactory` JUL logger to SEVERE (strong static reference so the level survives GC). No validation behavior change.
+
 ## [0.7.0] - 2026-07-26
 
 > Briefly on `main` as 0.6.13 (same content); re-versioned — a new bundling capability is a semver minor, not a patch (#68).
