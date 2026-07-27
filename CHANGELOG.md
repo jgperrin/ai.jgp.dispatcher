@@ -5,7 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.6.13] - 2026-07-26
+## [0.7.0] - 2026-07-26
+
+> Briefly on `main` as 0.6.13 (same content); re-versioned — a new bundling capability is a semver minor, not a patch (#68).
 
 ### Added
 
