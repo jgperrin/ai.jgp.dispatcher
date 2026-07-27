@@ -24,7 +24,7 @@ import java.util.zip.ZipOutputStream;
  * contract files. The ZIP contains:
  * <ul>
  *   <li>{productId}-v{productVersion}.odps.yaml</li>
- *   <li>{contractId}-v{portVersion}.odcs.yaml for each output port</li>
+ *   <li>{contractId}-v{portVersion}.odcs.yaml for each distinct contract referenced by an input or output port</li>
  * </ul>
  * Contract content is retrieved at the correct version using git tags
  * (format: contract-{contractId}-v{version}, as created by the bitol
@@ -36,7 +36,7 @@ public class ZipBuilder {
 
     /**
      * Builds a ZIP from a product YAML file. Parses the product to find
-     * referenced contracts via outputPorts, retrieves the contract content
+     * referenced contracts via inputPorts and outputPorts, retrieves the contract content
      * at the tagged version using git, and packages everything with
      * versioned filenames.
      *
@@ -72,102 +72,121 @@ public class ZipBuilder {
             addEntry(zos, productEntry, productContent.getBytes(StandardCharsets.UTF_8));
             System.out.println("  + " + productEntry);
 
-            // 2. Add contracts from output ports. Several ports may reference
-            //    the same contractId+version (one gold contract covering many
-            //    tables, #64) — the ZIP must carry that contract exactly once.
+            // 2. Add contracts referenced by ports — input ports first, then
+            //    output ports. Several ports may reference the same
+            //    contractId+version (one gold contract covering many tables,
+            //    #64; six input contracts shared by 17 input ports, #66) —
+            //    the ZIP must carry each contract exactly once, across both
+            //    arrays.
             java.util.Set<String> addedContracts = new java.util.HashSet<>();
-            JsonNode outputPorts = root.path("outputPorts");
-            if (outputPorts.isArray()) {
-                for (JsonNode port : outputPorts) {
-                    JsonNode contractIdNode = port.path("contractId");
-                    JsonNode portVersionNode = port.path("version");
-                    JsonNode portNameNode = port.path("name");
-                    String contractId = contractIdNode.isMissingNode() ? null : contractIdNode.asText();
-                    String portVersion = portVersionNode.isMissingNode() ? null : normalizeVersion(portVersionNode.asText());
-                    String portName = portNameNode.isMissingNode() ? "unnamed" : portNameNode.asText();
-
-                    if (contractId == null || contractId.isEmpty()) {
-                        log.fine("Skipping output port '" + portName + "' — no contractId");
-                        continue;
-                    }
-                    if (portVersion == null || portVersion.isEmpty()) {
-                        log.fine("Skipping output port '" + portName + "' — no version");
-                        continue;
-                    }
-
-                    String contractEntry = contractId + "-v" + portVersion + ".odcs.yaml";
-                    if (!addedContracts.add(contractEntry)) {
-                        log.fine("Output port '" + portName + "' reuses " + contractEntry
-                                + " — already in the ZIP");
-                        continue;
-                    }
-
-                    // Tag format: contract-<contractId>-v<version>
-                    // (matches GitHubService.buildTagName("contract", id, version))
-                    String tag = "contract-" + contractId + "-v" + portVersion;
-                    String gitPath = relativeDir + "/" + contractId + ".odcs.yaml";
-
-                    // 1. Conventional fast path: the contract lives at
-                    //    <dir>/<contractId>.odcs.yaml inside the tag.
-                    byte[] contractBytes = gitShow(tag, gitPath, dir);
-
-                    // 2. Name-based canonicalUrl (#52): the Workbench publishes a
-                    //    contract wherever its canonicalUrl points — usually a
-                    //    human-readable name, not "<contractId>.odcs.yaml". List
-                    //    the tag's tree and pick the *.odcs.yaml whose YAML id
-                    //    matches the referenced contract id.
-                    if (contractBytes == null) {
-                        contractBytes = resolveFromTagTree(tag, contractId, dir);
-                        if (contractBytes != null) {
-                            System.out.println("  (resolved '" + contractId
-                                    + "' by matching id in the tag tree — name-based path)");
-                        }
-                    }
-
-                    // 3. Local-file fallbacks (no usable tag): conventional path
-                    //    first, then a directory scan matching the id.
-                    if (contractBytes == null) {
-                        Path contractPath = dir.resolve(contractId + ".odcs.yaml");
-                        if (Files.exists(contractPath)) {
-                            contractBytes = Files.readAllBytes(contractPath);
-                            System.err.println("  Warning: tag '" + tag + "' not found, "
-                                    + "using current file for " + contractId);
-                        } else {
-                            contractBytes = resolveFromLocalScan(dir, contractId);
-                            if (contractBytes != null) {
-                                System.err.println("  Warning: tag '" + tag + "' not found, "
-                                        + "using name-based local file for " + contractId);
-                            } else {
-                                // #58 — say precisely which half failed: a
-                                // present-but-pathless tag reads very
-                                // differently from a missing tag.
-                                boolean tagPresent = !gitLsTree(tag, dir).isEmpty();
-                                System.err.println("  Warning: contract not found for " + contractId
-                                        + (tagPresent
-                                            ? " (tag '" + tag + "' exists but carries no"
-                                                + " *.odcs.yaml with that id at any path;"
-                                                + " no local file either)"
-                                            : " (no tag '" + tag + "', no local file)"));
-                                continue;
-                            }
-                        }
-                    }
-
-                    // Safety net (#33): make the contract's internal version
-                    // match how this output port references it, when they differ
-                    // only by the leading "v" — otherwise Zeenea rejects the
-                    // upload with "no matching data contract".
-                    contractBytes = normalizeContractVersion(
-                            contractBytes, portVersionNode.asText(), contractId);
-
-                    addEntry(zos, contractEntry, contractBytes);
-                    System.out.println("  + " + contractEntry + " (from output port '" + portName
-                            + "', tag: " + tag + ")");
-                }
-            }
+            addPortContracts(zos, root.path("inputPorts"), "input", addedContracts, relativeDir, dir);
+            addPortContracts(zos, root.path("outputPorts"), "output", addedContracts, relativeDir, dir);
         }
 
         return zipFile;
+    }
+
+    /**
+     * Adds the contract referenced by each port of one port array to the ZIP
+     * (#66 — input-port contracts ride the bundle too, so Control Center and
+     * the edge sidecars receive the product's full contract graph, not just
+     * the output side). Resolution order per contract is unchanged from the
+     * original output-port logic: tagged content first
+     * ({@code contract-<id>-v<version>}), then the name-based tag-tree match
+     * (#52), then local-file fallbacks (#58). Contracts already added — by
+     * either port array — are packaged once (#64).
+     */
+    private static void addPortContracts(ZipOutputStream zos, JsonNode ports, String portKind,
+            java.util.Set<String> addedContracts, String relativeDir, Path dir) throws IOException {
+        if (!ports.isArray()) {
+            return;
+        }
+        for (JsonNode port : ports) {
+            JsonNode contractIdNode = port.path("contractId");
+            JsonNode portVersionNode = port.path("version");
+            JsonNode portNameNode = port.path("name");
+            String contractId = contractIdNode.isMissingNode() ? null : contractIdNode.asText();
+            String portVersion = portVersionNode.isMissingNode() ? null : normalizeVersion(portVersionNode.asText());
+            String portName = portNameNode.isMissingNode() ? "unnamed" : portNameNode.asText();
+
+            if (contractId == null || contractId.isEmpty()) {
+                log.fine("Skipping " + portKind + " port '" + portName + "' — no contractId");
+                continue;
+            }
+            if (portVersion == null || portVersion.isEmpty()) {
+                log.fine("Skipping " + portKind + " port '" + portName + "' — no version");
+                continue;
+            }
+
+            String contractEntry = contractId + "-v" + portVersion + ".odcs.yaml";
+            if (!addedContracts.add(contractEntry)) {
+                log.fine(portKind + " port '" + portName + "' reuses " + contractEntry
+                        + " — already in the ZIP");
+                continue;
+            }
+
+            // Tag format: contract-<contractId>-v<version>
+            // (matches GitHubService.buildTagName("contract", id, version))
+            String tag = "contract-" + contractId + "-v" + portVersion;
+            String gitPath = relativeDir + "/" + contractId + ".odcs.yaml";
+
+            // 1. Conventional fast path: the contract lives at
+            //    <dir>/<contractId>.odcs.yaml inside the tag.
+            byte[] contractBytes = gitShow(tag, gitPath, dir);
+
+            // 2. Name-based canonicalUrl (#52): the Workbench publishes a
+            //    contract wherever its canonicalUrl points — usually a
+            //    human-readable name, not "<contractId>.odcs.yaml". List
+            //    the tag's tree and pick the *.odcs.yaml whose YAML id
+            //    matches the referenced contract id.
+            if (contractBytes == null) {
+                contractBytes = resolveFromTagTree(tag, contractId, dir);
+                if (contractBytes != null) {
+                    System.out.println("  (resolved '" + contractId
+                            + "' by matching id in the tag tree — name-based path)");
+                }
+            }
+
+            // 3. Local-file fallbacks (no usable tag): conventional path
+            //    first, then a directory scan matching the id.
+            if (contractBytes == null) {
+                Path contractPath = dir.resolve(contractId + ".odcs.yaml");
+                if (Files.exists(contractPath)) {
+                    contractBytes = Files.readAllBytes(contractPath);
+                    System.err.println("  Warning: tag '" + tag + "' not found, "
+                            + "using current file for " + contractId);
+                } else {
+                    contractBytes = resolveFromLocalScan(dir, contractId);
+                    if (contractBytes != null) {
+                        System.err.println("  Warning: tag '" + tag + "' not found, "
+                                + "using name-based local file for " + contractId);
+                    } else {
+                        // #58 — say precisely which half failed: a
+                        // present-but-pathless tag reads very
+                        // differently from a missing tag.
+                        boolean tagPresent = !gitLsTree(tag, dir).isEmpty();
+                        System.err.println("  Warning: contract not found for " + contractId
+                                + (tagPresent
+                                    ? " (tag '" + tag + "' exists but carries no"
+                                        + " *.odcs.yaml with that id at any path;"
+                                        + " no local file either)"
+                                    : " (no tag '" + tag + "', no local file)"));
+                        continue;
+                    }
+                }
+            }
+
+            // Safety net (#33): make the contract's internal version
+            // match how this port references it, when they differ
+            // only by the leading "v" — otherwise Zeenea rejects the
+            // upload with "no matching data contract".
+            contractBytes = normalizeContractVersion(
+                    contractBytes, portVersionNode.asText(), contractId);
+
+            addEntry(zos, contractEntry, contractBytes);
+            System.out.println("  + " + contractEntry + " (from " + portKind + " port '" + portName
+                    + "', tag: " + tag + ")");
+        }
     }
 
     /**

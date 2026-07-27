@@ -174,6 +174,92 @@ class ZipBuilderTest {
     }
 
     @Test
+    void buildFromProduct_packagesInputPortContracts() throws IOException {
+        // #66 — input-port contracts ride the bundle too. Product with input
+        // ports only; the referenced contract must land in the ZIP.
+        Path productFile = tmp.resolve("product.odps.yaml");
+        Files.writeString(tmp.resolve("cin.odcs.yaml"), "id: cin\nversion: 1.0.0");
+        Files.writeString(productFile, String.join("\n",
+                "id: prod-in",
+                "version: v1.0.0",
+                "inputPorts:",
+                "  - name: in1",
+                "    contractId: cin",
+                "    version: 1.0.0",
+                ""));
+
+        Path zip = ZipBuilder.buildFromProduct(productFile.toString());
+
+        Map<String, byte[]> entries = readZip(zip);
+        assertTrue(entries.containsKey("cin-v1.0.0.odcs.yaml"),
+                "expected input contract entry, got " + entries.keySet());
+        assertEquals(2, entries.size(), "entries: " + entries.keySet());
+    }
+
+    @Test
+    void buildFromProduct_packagesInputAndOutputContracts_dedupAcrossArrays() throws IOException {
+        // #66 — the AML shape: many input ports sharing few input contracts,
+        // plus output ports, plus one contract referenced from BOTH an input
+        // and an output port. Every distinct contract exactly once.
+        Path productFile = tmp.resolve("product.odps.yaml");
+        Files.writeString(tmp.resolve("cin.odcs.yaml"), "id: cin\nversion: 1.0.0");
+        Files.writeString(tmp.resolve("cout.odcs.yaml"), "id: cout\nversion: 1.0.0");
+        Files.writeString(tmp.resolve("cboth.odcs.yaml"), "id: cboth\nversion: 1.0.0");
+        Files.writeString(productFile, String.join("\n",
+                "id: prod-mixed",
+                "version: v3.0.0",
+                "inputPorts:",
+                "  - name: in1",
+                "    contractId: cin",
+                "    version: 1.0.0",
+                "  - name: in2",
+                "    contractId: cin",
+                "    version: 1.0.0",
+                "  - name: in3",
+                "    contractId: cboth",
+                "    version: 1.0.0",
+                "outputPorts:",
+                "  - name: out1",
+                "    contractId: cout",
+                "    version: 1.0.0",
+                "  - name: out2",
+                "    contractId: cboth",
+                "    version: 1.0.0",
+                ""));
+
+        Path zip = ZipBuilder.buildFromProduct(productFile.toString());
+
+        Map<String, byte[]> entries = readZip(zip);
+        assertTrue(entries.containsKey("prod-mixed-v3.0.0.odps.yaml"), "entries: " + entries.keySet());
+        assertTrue(entries.containsKey("cin-v1.0.0.odcs.yaml"), "entries: " + entries.keySet());
+        assertTrue(entries.containsKey("cout-v1.0.0.odcs.yaml"), "entries: " + entries.keySet());
+        assertTrue(entries.containsKey("cboth-v1.0.0.odcs.yaml"), "entries: " + entries.keySet());
+        assertEquals(4, entries.size(),
+                "expected product + 3 distinct contracts, got " + entries.keySet());
+    }
+
+    @Test
+    void buildFromProduct_skipsInputPortsWithoutContractIdOrVersion() throws IOException {
+        // #66 — the skip guards apply to input ports too.
+        Path productFile = tmp.resolve("product.odps.yaml");
+        Files.writeString(productFile, String.join("\n",
+                "id: prod-in-skip",
+                "version: 0.1.0",
+                "inputPorts:",
+                "  - name: no-contract",
+                "    version: 1.0.0",
+                "  - name: no-version",
+                "    contractId: c-missing",
+                ""));
+
+        Path zip = ZipBuilder.buildFromProduct(productFile.toString());
+        Map<String, byte[]> entries = readZip(zip);
+
+        assertEquals(1, entries.size(), "entries: " + entries.keySet());
+        assertTrue(entries.containsKey("prod-in-skip-v0.1.0.odps.yaml"));
+    }
+
+    @Test
     void buildFromProduct_skipsPortsWithoutContractId() throws IOException {
         Path productFile = tmp.resolve("product.odps.yaml");
         Files.writeString(productFile, String.join("\n",
