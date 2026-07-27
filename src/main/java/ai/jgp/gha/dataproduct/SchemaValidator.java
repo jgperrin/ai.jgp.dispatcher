@@ -44,6 +44,18 @@ public final class SchemaValidator {
     private static final ObjectMapper YAML = new ObjectMapper(new YAMLFactory());
     private static final ObjectMapper JSON = new ObjectMapper();
 
+    // #70 — the vendored ODCS schema's named server-type definitions
+    // (ApiServer, AthenaServer, …) are read as unknown-but-irrelevant schema
+    // keywords when the schema loads, and networknt logs one WARNING each
+    // (~36 lines of noise per GHA run). Raise that logger to SEVERE. The
+    // strong static reference is required: JUL holds loggers weakly, so
+    // without it the level could be garbage-collected away mid-run.
+    private static final java.util.logging.Logger NETWORKNT_UNKNOWN_KEYWORD_LOGGER =
+            java.util.logging.Logger.getLogger("com.networknt.schema.UnknownKeywordFactory");
+    static {
+        NETWORKNT_UNKNOWN_KEYWORD_LOGGER.setLevel(java.util.logging.Level.SEVERE);
+    }
+
     private SchemaValidator() {
     }
 
