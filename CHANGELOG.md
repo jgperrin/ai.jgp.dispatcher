@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.13] - 2026-07-26
+
+### Added
+
+- **Input-port contracts ride the descriptor bundle (#66).** `ZipBuilder` walked `outputPorts` only, so a product's input-side contracts never reached Control Center or the edge sidecars — the AML v3 model (cba#78: 17 input ports over 6 silver contracts) shipped bundles with dangling input `contractId` references. The port-contract loop is now a shared helper run over `inputPorts` then `outputPorts`, with the #64 dedup spanning both arrays (a contract referenced by input *and* output ports is packaged once). Resolution order per contract is unchanged (tag → tag-tree by id → local fallbacks). Tests: input-only product, mixed product with cross-array shared contract, input-port skip guards.
+
 ## [0.6.12] - 2026-07-26
 
 ### Fixed
