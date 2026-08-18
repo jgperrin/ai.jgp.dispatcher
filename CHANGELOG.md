@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-08-17
+
+### Added
+
+- **ODPS v1.1.0 products validate and publish (#75).** `odps-json-schema-v1.1.0.json` is vendored from `bitol-io/open-data-product-standard@dev-v1.1.0` (commit `137e01f`, 2026-06-30) — byte for byte the copy `ai.jgp.bitol.svc#1071` vendored, so the two repos cannot disagree about what v1.1.0 is. Until now `SchemaValidator` hard-pinned ODPS to v1.0.0, whose `apiVersion` is a closed enum, so any v1.1.0 product svc produced failed the GitHub Action on the publish path.
+
+### Changed
+
+- **ODPS validation dispatches on the document's declared `apiVersion`.** `v0.9.0` and `v1.0.0` resolve to the v1.0.0 schema (its enum already covers both); `v1.1.0` resolves to the new file. Dispatching rather than repointing at a permissive `-latest` alias is deliberate: v1.1.0 *relaxes* requirements — input and output ports need only `name`, top-level `status` becomes optional — so a single newest-schema check would silently pass a genuinely invalid v1.0.0 product, which is the exact failure a fail-fast validator exists to prevent. A regression test asserts a v1.0.0 input port without `contractId` is still rejected, and that the same document declaring `v1.1.0` passes.
+- **An ODPS document declaring an unknown `apiVersion` is now rejected** with a violation naming the declared version and listing the ones this validator knows. A missing or unreadable `apiVersion` is likewise a violation and never falls through to the newest, most permissive schema.
+- **`SchemaValidator`'s class Javadoc** records the new file and its source commit, states that both ODPS v1.1.0 and ODCS v3.2.0 are drafts this validator deliberately accepts, and puts the remaining ODCS/ODPS asymmetry on the record: ODCS keeps its single `-latest` alias because dispatching there would mean vendoring all eight versions in its enum.
+- The `UnknownKeywordFactory` log-noise suppression (#70) is unaffected — it raises the logger level for every schema load, and a full `mvn test` with the new file emits zero unknown-keyword warnings.
+
+### Fixed
+
+- **Version drift.** `K.VERSION` had been left at `0.7.2` while `pom.xml` moved to `0.7.3`; both now read `0.8.0`.
+
 ## [0.7.3] - 2026-08-03
 
 ### Changed

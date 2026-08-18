@@ -35,11 +35,63 @@ class SchemaValidatorTest {
             version: 1.0.0
             """;
 
-    // Missing required `status`, and apiVersion outside the enum.
+    // Missing required `status` — invalid under the v1.0.0 schema it declares.
     private static final String INVALID_ODPS = """
+            apiVersion: v1.0.0
+            kind: DataProduct
+            id: imdb
+            """;
+
+    // #75 — a v1.1.0 product exercising the relaxation: the output port
+    // carries only `name` (v1.0.0 also requires `version`), and there is no
+    // top-level `status` (required in v1.0.0, optional in v1.1.0).
+    private static final String VALID_ODPS_V110 = """
+            apiVersion: v1.1.0
+            kind: DataProduct
+            id: imdb
+            name: IMDB
+            version: 1.1.0
+            outputPorts:
+              - name: bronze
+            """;
+
+    // #75 AC-4 — invalid *only* under v1.0.0's stricter rules: an input port
+    // without `contractId` (required in v1.0.0, relaxed to name-only in
+    // v1.1.0). This is the property a single permissive schema would lose.
+    private static final String INVALID_ODPS_V100_STRICT_ONLY = """
+            apiVersion: v1.0.0
+            kind: DataProduct
+            id: imdb
+            status: active
+            name: IMDB
+            version: 1.0.0
+            inputPorts:
+              - name: source
+            """;
+
+    // #75 AC-3 — declares a version this validator has no schema for.
+    private static final String UNKNOWN_API_VERSION_ODPS = """
             apiVersion: v9.9.9
             kind: DataProduct
             id: imdb
+            """;
+
+    // #75 AC-3 — no apiVersion at all: must not fall through to the newest,
+    // most permissive schema.
+    private static final String NO_API_VERSION_ODPS = """
+            kind: DataProduct
+            id: imdb
+            name: IMDB
+            """;
+
+    // #75 AC-7 — ODCS regression: a v3.2.0 contract still validates against
+    // the aliased `-latest` schema.
+    private static final String VALID_ODCS_V320 = """
+            apiVersion: v3.2.0
+            kind: DataContract
+            id: c3
+            version: 1.0.0
+            status: active
             """;
 
     private static final String VALID_ODCS = """
@@ -144,6 +196,68 @@ class SchemaValidatorTest {
         Path notAZip = tmp.resolve("fake.zip");
         Files.writeString(notAZip, "z");
         assertFalse(SchemaValidator.validateZip(notAZip).isEmpty());
+    }
+
+    @Test
+    void odpsV110ProductPasses() throws IOException {
+        Path zip = zipOf(Map.of("podem/imdb.odps.yaml", VALID_ODPS_V110));
+        List<String> violations = SchemaValidator.validateZip(zip);
+        assertTrue(violations.isEmpty(), () -> String.join("\n", violations));
+    }
+
+    @Test
+    void v100ProductStillFailsOnV100StrictRules() throws IOException {
+        Path zip = zipOf(Map.of("podem/imdb.odps.yaml", INVALID_ODPS_V100_STRICT_ONLY));
+        List<String> violations = SchemaValidator.validateZip(zip);
+        assertFalse(violations.isEmpty(),
+                "a v1.0.0 input port without contractId must still be rejected");
+        assertTrue(String.join("\n", violations).contains("contractId"),
+                () -> String.join("\n", violations));
+    }
+
+    @Test
+    void theSameDocumentPassesWhenItDeclaresV110() throws IOException {
+        // Same shape as the v1.0.0 negative fixture, but declaring v1.1.0 —
+        // proves the dispatch is on the declared version, not on the content.
+        Path zip = zipOf(Map.of("podem/imdb.odps.yaml",
+                INVALID_ODPS_V100_STRICT_ONLY.replace("apiVersion: v1.0.0", "apiVersion: v1.1.0")));
+        List<String> violations = SchemaValidator.validateZip(zip);
+        assertTrue(violations.isEmpty(), () -> String.join("\n", violations));
+    }
+
+    @Test
+    void unknownApiVersionIsRejectedAndListsTheKnownOnes() throws IOException {
+        Path zip = zipOf(Map.of("podem/imdb.odps.yaml", UNKNOWN_API_VERSION_ODPS));
+        List<String> violations = SchemaValidator.validateZip(zip);
+        assertEquals(1, violations.size(), () -> String.join("\n", violations));
+        String v = violations.get(0);
+        assertTrue(v.startsWith("podem/imdb.odps.yaml: "), v);
+        assertTrue(v.contains("v9.9.9"), v);
+        assertTrue(v.contains("v0.9.0") && v.contains("v1.0.0") && v.contains("v1.1.0"), v);
+    }
+
+    @Test
+    void missingApiVersionDoesNotFallThroughToTheNewestSchema() throws IOException {
+        Path zip = zipOf(Map.of("podem/imdb.odps.yaml", NO_API_VERSION_ODPS));
+        List<String> violations = SchemaValidator.validateZip(zip);
+        assertEquals(1, violations.size(), () -> String.join("\n", violations));
+        assertTrue(violations.get(0).contains("apiVersion"), violations.get(0));
+    }
+
+    @Test
+    void odcsV320ContractStillPasses() throws IOException {
+        Path zip = zipOf(Map.of("podem/c3.odcs.yaml", VALID_ODCS_V320));
+        List<String> violations = SchemaValidator.validateZip(zip);
+        assertTrue(violations.isEmpty(), () -> String.join("\n", violations));
+    }
+
+    @Test
+    void everyKnownOdpsVersionResolvesToAVendoredSchema() {
+        for (String version : SchemaValidator.knownOdpsApiVersions()) {
+            String resource = SchemaValidator.odpsSchemaFor(version);
+            assertTrue(SchemaValidator.class.getResource(resource) != null,
+                    () -> version + " maps to " + resource + ", which is not on the classpath");
+        }
     }
 
     @Test
