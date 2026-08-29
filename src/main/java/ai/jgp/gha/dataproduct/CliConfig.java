@@ -89,7 +89,7 @@ public class CliConfig {
                     break;
                 case "--version":
                 case "-v":
-                    System.out.println("data-product-uploader v" + K.VERSION);
+                    System.out.println("Data Product Uploader v" + K.VERSION);
                     System.exit(0);
                     break;
                 default:
