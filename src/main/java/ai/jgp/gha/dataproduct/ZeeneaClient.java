@@ -29,10 +29,6 @@ public class ZeeneaClient {
     private String lastUploadId;
     private String lastError;
 
-    public ZeeneaClient(CliConfig config) {
-        this(config, config.getFilePath());
-    }
-
     public ZeeneaClient(CliConfig config, String zipPath) {
         this(config, zipPath, HttpClient.newHttpClient());
     }

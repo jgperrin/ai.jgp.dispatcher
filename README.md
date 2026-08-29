@@ -1,6 +1,6 @@
 # Data Product Uploader
 
-A Java CLI tool that uploads [ODPS](https://opendataproductspecification.com/) data product descriptors to the [Actian Data Intelligence Platform](https://www.actian.com/) (Zeenea) via its Data Product API. Optionally, it also publishes each spec to a Kafka topic for ingestion by the [Data Product Control Center](https://github.com/jgperrin/ai.jgp.controlcenter). It can be used standalone or as part of a GitHub Actions workflow.
+A Java CLI tool that uploads [ODPS](https://github.com/bitol-io/open-data-product-standard) data product descriptors to the [Actian Data Intelligence Platform](https://www.actian.com/) (Zeenea) via its Data Product API. Optionally, it also publishes each spec to a Kafka topic for ingestion by the [Data Product Control Center](https://github.com/jgperrin/ai.jgp.controlcenter). It can be used standalone or as part of a GitHub Actions workflow.
 
 ## How It Works
 

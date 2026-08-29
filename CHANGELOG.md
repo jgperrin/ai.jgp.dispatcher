@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] - 2026-08-28
+
+### Changed
+
+- **Audit trivial consistency batch (#82).** `README.md`'s ODPS link now points at Bitol's [Open Data Product Standard](https://github.com/bitol-io/open-data-product-standard) instead of the unrelated opendataproductspecification.com; `--version` output unified on `Data Product Uploader` (was `data-product-uploader` in `CliConfig` only); `UploadResponse` reuses `K.HEADER_KMS_ENCRYPTION`/`K.HEADER_KMS_KEY_ID` instead of re-hard-coding the header strings; the dead single-arg `ZeeneaClient(CliConfig)` constructor is removed (no callers); `KafkaPublisher`'s three `"changeit"` truststore-password literals collapse into one private `TRUSTSTORE_PASSWORD` constant; and the auto-trust TECH DEBT comment now cites its tracking issue (#79). No behavior change beyond printed strings and docs.
+
 ## [0.8.0] - 2026-08-17
 
 ### Added

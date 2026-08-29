@@ -1,5 +1,6 @@
 package ai.jgp.gha.dataproduct.model;
 
+import ai.jgp.gha.dataproduct.K;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -59,11 +60,11 @@ public class UploadResponse {
     }
 
     public String getKmsEncryption() {
-        return headers.get("x-amz-server-side-encryption");
+        return headers.get(K.HEADER_KMS_ENCRYPTION);
     }
 
     public String getKmsKeyId() {
-        return headers.get("x-amz-server-side-encryption-aws-kms-key-id");
+        return headers.get(K.HEADER_KMS_KEY_ID);
     }
 
     public long getMaxFileSize() {

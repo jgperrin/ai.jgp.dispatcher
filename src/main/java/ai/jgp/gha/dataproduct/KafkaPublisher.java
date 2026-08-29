@@ -37,6 +37,9 @@ public class KafkaPublisher {
 
     private static final long CLOSE_TIMEOUT_SECONDS = 2;
 
+    /** Password for the temporary auto-trust JKS truststore (see TECH DEBT, #79). */
+    private static final String TRUSTSTORE_PASSWORD = "changeit";
+
     /**
      * Producer timeouts and the retry budget. Cold-producer metadata fetches
      * from GH runners routinely exceed 5s (#54: a 5s {@code max.block.ms}
@@ -95,13 +98,14 @@ public class KafkaPublisher {
             // TECH DEBT: auto-trust the broker's certificate to avoid external
             // truststore files. Fetches the server cert at runtime and creates a
             // temporary JKS truststore. The connection is encrypted (TLS) and trusts
-            // only the actual server cert. Replace with proper CA management when feasible.
+            // only the actual server cert. Replace with proper CA management when
+            // feasible — tracked in #79.
             props.put("ssl.endpoint.identification.algorithm", "");
             try {
                 String tempTruststore = buildTruststoreFromBroker(broker);
                 if (tempTruststore != null) {
                     props.put("ssl.truststore.location", tempTruststore);
-                    props.put("ssl.truststore.password", "changeit");
+                    props.put("ssl.truststore.password", TRUSTSTORE_PASSWORD);
                     System.out.println("       SSL:      auto-trusted broker certificate");
                 }
             } catch (Exception e) {
@@ -333,14 +337,14 @@ public class KafkaPublisher {
 
         // Build a JKS truststore containing the server's cert chain
         KeyStore ks = KeyStore.getInstance("JKS");
-        ks.load(null, "changeit".toCharArray());
+        ks.load(null, TRUSTSTORE_PASSWORD.toCharArray());
         for (int i = 0; i < serverCerts.length; i++) {
             ks.setCertificateEntry("kafka-cert-" + i, serverCerts[i]);
         }
         Path tempFile = Files.createTempFile("kafka-trust-", ".jks");
         tempFile.toFile().deleteOnExit();
         try (OutputStream os = Files.newOutputStream(tempFile)) {
-            ks.store(os, "changeit".toCharArray());
+            ks.store(os, TRUSTSTORE_PASSWORD.toCharArray());
         }
         return tempFile.toAbsolutePath().toString();
     }
