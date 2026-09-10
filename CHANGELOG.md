@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.2] - 2026-09-09
+
+### Fixed
+
+- **The vendored `odcs-json-schema-latest.json` was a body that predated ODCS v3.2.0 entirely (#84).** `SchemaValidator` validates every `*.odcs.yaml` in a spec ZIP against it, on the publish path, so this validator was rejecting artifacts the standard permits. Re-vendored verbatim from the upstream release tags (both tagged 2026-09-08):
+
+  | File | Before | After |
+  |---|---|---|
+  | `odcs-json-schema-latest.json` | `e5e6ef95…` (**pre-v3.2.0 body**) | `f934075459fce0a20a3c8260dd2076872f91e2b9` |
+  | `odps-json-schema-v1.1.0.json` | `4a448716…` | `3384d244d3a81182189f123b3b374b4241f70be1` |
+
+  `odps-json-schema-v1.0.0.json` was already the released bytes (`40b46c69…`) and is untouched.
+
+- **The label was right and the body was two editions behind.** The stale file's `properties.apiVersion.default` read `"v3.2.0"` — exactly as the released one does — while carrying **35** server types instead of 44 and **no `$defs.Port`**. Every assertion anyone would naturally reach for passed happily. That is why the new tests pin the **blob hash**.
+
+- What the validator now accepts that it did not: the whole v3.2.0 feature set (`enum`, `map`, `vector`, `context`, `synonyms`, `semanticType`, `deprecated`, `encoding`, SLA `customProperties`, relationship `id`, string-valued server ports, and the nine RFC-0057/RFC-0059 server types), plus RFC-0026a's id **denylist** in place of the old allowlist — so namespaced ids (`fdir:ISU:TAD`) and non-ASCII ids validate. Every pattern change is strictly widening, so nothing that validated before can start failing. ODPS v1.1.0 adds exactly three properties to `$defs.SBOM` (RFC-0061), confirmed as parsed JSON; the object stays closed.
+
+### Added
+
+- `VendoredSchemaBytesTest` — 9 tests pinning both released blob hashes, asserting the features whose absence was the actual damage, and asserting that `odps-json-schema-v1.0.0.json` did **not** move (so a future re-sync cannot quietly take more than it meant to). One test exists purely to document that `apiVersion.default` is **not** evidence a copy is current.
+
+### Changed
+
+- `SchemaValidator`'s javadoc no longer describes v3.2.0 and v1.1.0 as drafts vendored from `dev-` branches — both were released on 2026-09-08 and are now vendored from their tags. It also records, per #84 AC-5, **why** the ODCS side keeps a `-latest` alias (dispatching per declared version there would mean vendoring all eight editions in its enum, against two on the ODPS side), that the alias is **live** rather than dead code, and that it must track the current **approved** edition and never upstream's newest draft.
+
 ## [0.8.1] - 2026-08-28
 
 ### Changed

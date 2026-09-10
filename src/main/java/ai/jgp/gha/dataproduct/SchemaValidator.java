@@ -31,21 +31,35 @@ import java.util.zip.ZipInputStream;
  * <ul>
  *   <li>{@code odps-json-schema-v1.0.0.json} — from
  *       github.com/bitol-io/open-data-product-standard {@code schema/}</li>
- *   <li>{@code odps-json-schema-v1.1.0.json} (#75) — same repo, branch
- *       {@code dev-v1.1.0} at commit {@code 137e01f} (2026-06-30), byte for
- *       byte the copy vendored by {@code ai.jgp.bitol.svc#1071} so the two
- *       repos cannot disagree about what v1.1.0 is</li>
- *   <li>{@code odcs-json-schema-latest.json} (v3.2.0-capable) — from
- *       github.com/bitol-io/open-data-contract-standard {@code schema/}</li>
+ *   <li>{@code odps-json-schema-v1.1.0.json} — the RELEASED v1.1.0, vendored
+ *       verbatim from tag {@code v1.1.0} (blob
+ *       {@code 3384d244d3a81182189f123b3b374b4241f70be1})</li>
+ *   <li>{@code odcs-json-schema-latest.json} — the RELEASED ODCS v3.2.0,
+ *       vendored verbatim from tag {@code v3.2.0} (blob
+ *       {@code f934075459fce0a20a3c8260dd2076872f91e2b9})</li>
  * </ul>
- * All declare JSON Schema draft 2019-09. To refresh, copy the newer file
- * from the standard repo and update the constant here.
+ * All declare JSON Schema draft 2019-09.
  *
- * <p><b>Both v1.1.0 and v3.2.0 are drafts</b> — ODPS v1.1.0 is vendored from
- * an unmerged {@code dev-} branch, and the ODCS alias follows upstream's
- * {@code -latest} pointer, which upstream already aims at the 3.2.0 draft.
- * Accepting them is a deliberate choice, not an accident: this validator sits
- * on the publish path for artifacts the Workbench itself authors.
+ * <p><b>Neither is a draft any more (#84).</b> ODCS v3.2.0 and ODPS v1.1.0 were
+ * both released on 2026-09-08 and are vendored from their release tags. The
+ * previous wording here described them as drafts vendored from {@code dev-}
+ * branches, which stopped being true on release day.
+ *
+ * <p><b>Refresh by BLOB HASH, never by eye.</b> Until #84 the ODCS alias was
+ * {@code e5e6ef95…}, a body that predated v3.2.0 entirely — 35 server types
+ * instead of 44, no {@code $defs.Port} — while its {@code apiVersion.default}
+ * read {@code "v3.2.0"} the whole time. The label was right and the body was
+ * two editions behind, so every natural assertion passed.
+ * {@code VendoredSchemaBytesTest} pins the hashes for that reason.
+ *
+ * <p><b>Why an alias rather than a version-pinned ODCS file (#84 AC-5).</b>
+ * It is live: {@link #ODCS_SCHEMA} is what every {@code *.odcs.yaml} in a spec
+ * ZIP is validated against, so it is not dead code to delete. It exists because
+ * dispatching per declared version on the ODCS side would mean vendoring all
+ * eight editions in its {@code apiVersion} enum, where the ODPS side needs only
+ * two. The alias must therefore track the current <b>approved</b> edition and
+ * never upstream's newest draft — the same rule
+ * {@code ai.jgp.bitol.svc}'s provenance README states for its own aliases.
  *
  * <p><b>ODPS dispatches on the declared {@code apiVersion}; ODCS stays
  * aliased</b> (#75). ODPS v1.1.0 <em>relaxes</em> requirements — input and
