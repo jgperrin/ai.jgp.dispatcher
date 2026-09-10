@@ -205,17 +205,21 @@
     "ShorthandReference": {
       "type": "string",
       "description": "Shorthand notation using name fields (table_name.column_name)",
-      "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+$"
+      "pattern": "^[A-Za-z_][A-Za-z0-9_\\-]*(\\.[A-Za-z_][A-Za-z0-9_\\-]*)+$"
     },
     "FullyQualifiedReference": {
       "type": "string",
       "description": "Fully qualified notation using id fields (section/id/properties/id), optionally prefixed with external file reference",
-      "pattern": "^(?:(?:https?:\\/\\/)?[A-Za-z0-9._\\-\\/]+\\.ya?ml#)?\\/?[A-Za-z_][A-Za-z0-9_]*\\/[A-Za-z0-9_-]+(?:\\/[A-Za-z_][A-Za-z0-9_]*\\/[A-Za-z0-9_-]+)*$"
+      "pattern": "^(?:(?:https?:\\/\\/)?[A-Za-z0-9._\\-\\/]+\\.ya?ml#)?\\/?[A-Za-z_][A-Za-z0-9_]*\\/[^\\s.#/\\\\@!%&^]+(?:\\/[A-Za-z_][A-Za-z0-9_]*\\/[^\\s.#/\\\\@!%&^]+)*$"
     },
     "StableId": {
       "type": "string",
-      "description": "Stable technical identifier for references. Must be unique within its containing array. Cannot contain special characters ('-', '_' allowed).",
-      "pattern": "^[A-Za-z0-9_-]+$"
+      "description": "Stable technical identifier for references. Must be unique within its containing array. Per RFC-0026a an id cannot contain '.', '#', '/', '\\', '@', '!', '%', '&' or '^', nor whitespace.",
+      "pattern": "^[^\\s.#/\\\\@!%&^]+$"
+    },
+    "Port": {
+      "type": ["integer", "string"],
+      "description": "A network port: an integer, or a string, e.g. to hold a variable reference such as ${DB_PORT} resolved at runtime (RFC 0050)."
     },
     "Server": {
       "type": "object",
@@ -232,10 +236,10 @@
           "type": "string",
           "description": "Type of the server.",
           "enum": [
-            "api", "athena", "azure", "bigquery", "clickhouse", "databricks", "denodo", "dremio",
-            "duckdb", "glue", "hana", "cloudsql", "db2", "hive", "impala", "informix", "kafka", "kinesis", "local",
-            "mysql", "oracle", "postgresql", "postgres", "presto", "pubsub",
-            "redshift", "s3", "sftp", "snowflake", "sqlserver", "synapse", "trino", "vertica", "zen", "custom"
+            "api", "athena", "azure", "bigquery", "btrieve", "clickhouse", "databricks", "denodo", "dremio",
+            "duckdb", "exasol", "fastobjects", "glue", "hana", "cloudsql", "db2", "hive", "iceberg", "impala", "informix", "ingres", "kafka", "kinesis", "local",
+            "mysql", "oracle", "poet", "postgresql", "postgres", "presto", "pubsub",
+            "redshift", "s3", "sftp", "snowflake", "sqlserver", "synapse", "teradata", "trino", "vectorwise", "versant", "vertica", "zen", "custom"
           ]
         },
         "description": {
@@ -315,6 +319,19 @@
           "if": {
             "properties": {
               "type": {
+                "const": "btrieve"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "$ref": "#/$defs/ServerSource/ZenServer"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
                 "const": "clickhouse"
               }
             },
@@ -374,6 +391,32 @@
           },
           "then": {
             "$ref": "#/$defs/ServerSource/DuckdbServer"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "exasol"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "$ref": "#/$defs/ServerSource/ExasolServer"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "fastobjects"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "$ref": "#/$defs/ServerSource/PoetServer"
           }
         },
         {
@@ -452,6 +495,19 @@
           },
           "then": {
             "$ref": "#/$defs/ServerSource/InformixServer"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "ingres"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "$ref": "#/$defs/ServerSource/IngresServer"
           }
         },
         {
@@ -549,6 +605,19 @@
           "if": {
             "properties": {
               "type": {
+                "const": "poet"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "$ref": "#/$defs/ServerSource/PoetServer"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
                 "const": "hana"
               }
             },
@@ -556,6 +625,19 @@
           },
           "then": {
             "$ref": "#/$defs/ServerSource/HanaServer"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "iceberg"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "$ref": "#/$defs/ServerSource/IcebergServer"
           }
         },
         {
@@ -692,6 +774,19 @@
           "if": {
             "properties": {
               "type": {
+                "const": "teradata"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "$ref": "#/$defs/ServerSource/TeradataServer"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
                 "const": "trino"
               }
             },
@@ -699,6 +794,32 @@
           },
           "then": {
             "$ref": "#/$defs/ServerSource/TrinoServer"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "vectorwise"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "$ref": "#/$defs/ServerSource/VectorwiseServer"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "versant"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "$ref": "#/$defs/ServerSource/VersantServer"
           }
         },
         {
@@ -846,7 +967,7 @@
             "description": "The host of the ClickHouse server."
           },
           "port": {
-            "type": "integer",
+            "$ref": "#/$defs/Port",
             "description": "The port to the ClickHouse server."
           },
           "database": {
@@ -894,7 +1015,7 @@
             "description": "The host of the Denodo server."
           },
           "port": {
-            "type": "integer",
+            "$ref": "#/$defs/Port",
             "description": "The port of the Denodo server."
           },
           "database": {
@@ -916,7 +1037,7 @@
             "description": "The host of the Dremio server."
           },
           "port": {
-            "type": "integer",
+            "$ref": "#/$defs/Port",
             "description": "The port of the Dremio server."
           },
           "schema": {
@@ -944,6 +1065,35 @@
         },
         "required": [
           "database"
+        ]
+      },
+      "ExasolServer": {
+        "type": "object",
+        "title": "ExasolServer",
+        "properties": {
+          "host": {
+            "type": "string",
+            "description": "Host of the Exasol server. May be a cluster connection range.",
+            "examples": [
+              "exasol.acme.com",
+              "n11..14.acme.com"
+            ]
+          },
+          "port": {
+            "$ref": "#/$defs/Port",
+            "description": "Port of the Exasol server.",
+            "default": 8563,
+            "examples": [
+              8563
+            ]
+          },
+          "schema": {
+            "type": "string",
+            "description": "Name of the schema."
+          }
+        },
+        "required": [
+          "host"
         ]
       },
       "GlueServer": {
@@ -1007,7 +1157,7 @@
             "description": "The host of the Google Cloud Sql server."
           },
           "port": {
-            "type": "integer",
+            "$ref": "#/$defs/Port",
             "description": "The port of the Google Cloud Sql server."
           },
           "database": {
@@ -1035,7 +1185,7 @@
             "description": "The host of the IBM DB2 server."
           },
           "port": {
-            "type": "integer",
+            "$ref": "#/$defs/Port",
             "description": "The port of the IBM DB2 server."
           },
           "database": {
@@ -1062,7 +1212,7 @@
             "description": "The host to the Hive server. "
           },
           "port": {
-            "type": "integer",
+            "$ref": "#/$defs/Port",
             "description": "The port to the Hive server. Defaults to 10000."
           },
           "database": {
@@ -1084,7 +1234,7 @@
             "description": "The host to the Impala server."
           },
           "port": {
-            "type": "integer",
+            "$ref": "#/$defs/Port",
             "description": "The port to the Impala server. Defaults to 21050."
           },
           "database": {
@@ -1106,7 +1256,7 @@
             "description": "The host to the Informix server. "
           },
           "port": {
-            "type": "integer",
+            "$ref": "#/$defs/Port",
             "description": "The port to the Informix server. Defaults to 9088."
           },
           "database": {
@@ -1119,6 +1269,38 @@
           "database"
         ]
       },
+      "IngresServer": {
+        "type": "object",
+        "title": "IngresServer",
+        "properties": {
+          "database": {
+            "type": "string",
+            "description": "Database name to connect to on the Ingres instance.",
+            "examples": [
+              "sales"
+            ]
+          },
+          "host": {
+            "type": "string",
+            "description": "Hostname or IP address of the Ingres server.",
+            "examples": [
+              "ingres.acme.com"
+            ]
+          },
+          "port": {
+            "$ref": "#/$defs/Port",
+            "description": "Connection port for the Ingres Data Access Server (DAS) / SQL connections.",
+            "default": 21064,
+            "examples": [
+              21064
+            ]
+          }
+        },
+        "required": [
+          "database",
+          "host"
+        ]
+      },
       "ZenServer": {
         "type": "object",
         "title": "ZenServer",
@@ -1128,7 +1310,7 @@
             "description": "Hostname or IP address of the Zen server."
           },
           "port": {
-            "type": "integer",
+            "$ref": "#/$defs/Port",
             "description": "Zen server SQL connections port. Defaults to 1583."
           },
           "database": {
@@ -1195,7 +1377,7 @@
             "description": "Relative or absolute path to the data file(s)."
           },
           "port": {
-            "type": "integer",
+            "$ref": "#/$defs/Port",
             "description": "Port to the server. No default value is assumed for custom servers."
           },
           "project": {
@@ -1342,7 +1524,7 @@
             "description": "The host of the MySql server."
           },
           "port": {
-            "type": "integer",
+            "$ref": "#/$defs/Port",
             "description": "The port of the MySql server."
           },
           "database": {
@@ -1368,7 +1550,7 @@
             ]
           },
           "port": {
-            "type": "integer",
+            "$ref": "#/$defs/Port",
             "description": "The port to the oracle server.",
             "examples": [
               1523
@@ -1388,6 +1570,39 @@
           "serviceName"
         ]
       },
+      "PoetServer": {
+        "type": "object",
+        "title": "PoetServer",
+        "properties": {
+          "database": {
+            "type": "string",
+            "description": "Database name to connect to on the FastObjects instance.",
+            "examples": [
+              "parts_catalog"
+            ]
+          },
+          "host": {
+            "type": "string",
+            "description": "Hostname or IP address of the FastObjects server. The literal LOCAL selects the in-process embedded engine.",
+            "default": "LOCAL",
+            "examples": [
+              "LOCAL",
+              "fastobjects02.acme.com"
+            ]
+          },
+          "port": {
+            "$ref": "#/$defs/Port",
+            "description": "Connection port for FastObjects connections.",
+            "default": 6001,
+            "examples": [
+              6001
+            ]
+          }
+        },
+        "required": [
+          "database"
+        ]
+      },
       "PostgresServer": {
         "type": "object",
         "title": "PostgresServer",
@@ -1397,7 +1612,7 @@
             "description": "The host to the Postgres server"
           },
           "port": {
-            "type": "integer",
+            "$ref": "#/$defs/Port",
             "description": "The port to the Postgres server."
           },
           "database": {
@@ -1425,7 +1640,7 @@
             "description": "Host of the HANA server."
           },
           "port": {
-            "type": "integer",
+            "$ref": "#/$defs/Port",
             "description": "Port of the HANA server."
           },
           "database": {
@@ -1439,6 +1654,36 @@
         },
         "required": [
           "host"
+        ]
+      },
+      "IcebergServer": {
+        "type": "object",
+        "title": "IcebergServer",
+        "properties": {
+          "catalog": {
+            "type": "string",
+            "description": "Catalog name as registered in the query engine or catalog service.",
+            "examples": ["my_catalog"]
+          },
+          "catalogUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL of the Iceberg compatible REST catalog service (Polaris, S3 Tables, Nessie, Unity Catalog, Glue, etc.)",
+            "examples": ["https://my-catalog-service.com"]
+          },
+          "namespace": {
+            "type": "string",
+            "description": "Dot-separated namespace/schema path within the catalog (e.g. db.schema or just db)."
+          },
+          "warehouse": {
+            "type": "string",
+            "description": "Logical catalog or base location for the catalog to use.",
+            "examples": ["s3://my-bucket/warehouse/sales/", "production", "development"]
+          }
+        },
+        "required": [
+          "catalog",
+          "catalogUrl"
         ]
       },
       "PrestoServer": {
@@ -1621,7 +1866,7 @@
             "description": "The host to the Snowflake server"
           },
           "port": {
-            "type": "integer",
+            "$ref": "#/$defs/Port",
             "description": "The port to the Snowflake server."
           },
           "account": {
@@ -1659,7 +1904,7 @@
             ]
           },
           "port": {
-            "type": "integer",
+            "$ref": "#/$defs/Port",
             "description": "The port to the database server.",
             "default": 1433,
             "examples": [
@@ -1696,7 +1941,7 @@
             "description": "The host of the Synapse server."
           },
           "port": {
-            "type": "integer",
+            "$ref": "#/$defs/Port",
             "description": "The port of the Synapse server."
           },
           "database": {
@@ -1708,6 +1953,34 @@
           "host",
           "port",
           "database"
+        ]
+      },
+      "TeradataServer": {
+        "type": "object",
+        "title": "TeradataServer",
+        "properties": {
+          "host": {
+            "type": "string",
+            "description": "Host of the Teradata server.",
+            "examples": [
+              "teradata.acme.com"
+            ]
+          },
+          "port": {
+            "$ref": "#/$defs/Port",
+            "description": "Port of the Teradata server.",
+            "default": 1025,
+            "examples": [
+              1025
+            ]
+          },
+          "database": {
+            "type": "string",
+            "description": "Name of the database."
+          }
+        },
+        "required": [
+          "host"
         ]
       },
       "TrinoServer": {
@@ -1722,7 +1995,7 @@
             ]
           },
           "port": {
-            "type": "integer",
+            "$ref": "#/$defs/Port",
             "description": "The Trino port."
           },
           "catalog": {
@@ -1747,6 +2020,70 @@
           "schema"
         ]
       },
+      "VectorwiseServer": {
+        "type": "object",
+        "title": "VectorwiseServer",
+        "properties": {
+          "database": {
+            "type": "string",
+            "description": "Database name to connect to on the Analytics Engine server.",
+            "examples": [
+              "warehouse"
+            ]
+          },
+          "host": {
+            "type": "string",
+            "description": "Hostname or IP address of the Analytics Engine server.",
+            "examples": [
+              "analytics.acme.com"
+            ]
+          },
+          "port": {
+            "$ref": "#/$defs/Port",
+            "description": "Connection port for the Data Access Server (DAS) / SQL connections.",
+            "default": 21064,
+            "examples": [
+              21064
+            ]
+          }
+        },
+        "required": [
+          "database",
+          "host"
+        ]
+      },
+      "VersantServer": {
+        "type": "object",
+        "title": "VersantServer",
+        "properties": {
+          "database": {
+            "type": "string",
+            "description": "Database name to connect to on the NoSQL Database instance.",
+            "examples": [
+              "policies"
+            ]
+          },
+          "host": {
+            "type": "string",
+            "description": "Hostname or IP address of the NoSQL Database server.",
+            "default": "localhost",
+            "examples": [
+              "nosql.acme.com"
+            ]
+          },
+          "port": {
+            "$ref": "#/$defs/Port",
+            "description": "Connection port for Actian NoSQL Database connections.",
+            "default": 5019,
+            "examples": [
+              5019
+            ]
+          }
+        },
+        "required": [
+          "database"
+        ]
+      },
       "VerticaServer": {
         "type": "object",
         "title": "VerticaServer",
@@ -1756,7 +2093,7 @@
             "description": "The host of the Vertica server."
           },
           "port": {
-            "type": "integer",
+            "$ref": "#/$defs/Port",
             "description": "The port of the Vertica server."
           },
           "database": {
@@ -2310,7 +2647,10 @@
               "logicalType": {
                 "const": "map"
               }
-            }
+            },
+            "required": [
+              "logicalType"
+            ]
           },
           "then": {
             "properties": {
@@ -2340,7 +2680,10 @@
               "logicalType": {
                 "const": "vector"
               }
-            }
+            },
+            "required": [
+              "logicalType"
+            ]
           },
           "then": {
             "properties": {
@@ -3146,6 +3489,10 @@
       "type": "object",
       "description": "Base definition for relationships between properties, typically for foreign key constraints.",
       "properties": {
+        "id": {
+          "type": "string",
+          "description": "Optional stable identifier for this relationship, unique within its containing relationships array. SHOULD remain stable across contract versions. Cannot contain: . # / \\ @ ! % & ^"
+        },
         "type": {
           "type": "string",
           "description": "The type of relationship. Defaults to 'foreignKey'.",
